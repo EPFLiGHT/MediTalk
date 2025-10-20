@@ -71,7 +71,7 @@ done
 
 echo ""
 echo "=========================================="
-echo "Setup complete! 🎉"
+echo "Setup complete! "
 echo ""
 echo "To start MediTalk:"
 echo "  ./start-local.sh"

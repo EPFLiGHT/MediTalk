@@ -146,8 +146,9 @@ class OrpheusTTS:
             layer_3.append(code_list[7*i+6]-(6*4096))
         
         # Follow the official implementation exactly
-        codes = [torch.tensor(layer_1).unsqueeze(0),
-                torch.tensor(layer_2).unsqueeze(0),
-                torch.tensor(layer_3).unsqueeze(0)]
+        # Move tensors to the same device as the model
+        codes = [torch.tensor(layer_1).unsqueeze(0).to(self.device),
+                torch.tensor(layer_2).unsqueeze(0).to(self.device),
+                torch.tensor(layer_3).unsqueeze(0).to(self.device)]
         audio_hat = self.snac_model.decode(codes)
         return audio_hat

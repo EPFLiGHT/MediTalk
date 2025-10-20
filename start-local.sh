@@ -81,7 +81,7 @@ start_service "webui" 8080
 
 echo ""
 echo "=========================================="
-echo "All services started! 🚀"
+echo "All services started! "
 echo ""
 echo "Service URLs:"
 echo "  - Web Interface: http://localhost:8080"

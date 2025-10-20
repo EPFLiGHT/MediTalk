@@ -58,6 +58,10 @@ Thumbs.db
 *.log
 logs/
 
+# Backup files
+*_BACKUP.*
+*_OLD_BACKUP.*
+
 # Audio outputs (keep structure but ignore large files)
 outputs/*
 !outputs/.gitkeep
@@ -74,9 +78,6 @@ services/modelCosy/pretrained_models/
 *.pt
 *.pth
 *.whl
-
-# CosyVoice embedded repository (exclude to avoid git submodule issues)
-services/modelCosy/CosyVoice/
 
 # Temporary files
 *.tmp
@@ -99,3 +100,7 @@ tmp/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Shell scripts
+test.sh
+help.sh

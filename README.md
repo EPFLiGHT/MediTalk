@@ -1,471 +1,271 @@
-# MediTalk - Giving Meditron a Voice
+# MediTalk - Medical AI with Voice
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 [![Research](https://img.shields.io/badge/status-research-orange.svg)]()
 
-**MediTalk** is a research project focused on giving the Meditron medical AI model natural conversational speech capabilities. This repository contains the baseline testing pipeline for evaluating various TTS approaches before developing the final solution: **fine-tuning Qwen for direct conversational speech generation**.
+**MediTalk** is a research project that gives the Meditron medical AI model natural conversational speech capabilities, enabling voice-based medical consultations.
 
-## Project Vision
+## Overview
 
-### Research Goal
-Create a medical AI that can engage in natural spoken conversations, moving beyond traditional text-to-speech to **end-to-end conversational speech generation**.
-
-### Current Phase: Baseline TTS Testing
-This implementation serves as a **testing framework** to evaluate existing TTS models with Meditron, establishing performance benchmarks before developing the advanced conversational speech system.
-
-### Future Phase: Conversational Speech AI
-The ultimate goal is to **fine-tune Qwen model for conversational speech generation**, where Meditron generates medical content and Qwen produces natural speech with appropriate conversational tone and context awareness.
-
-## Architecture Evolution
-
-### Target Conversational Pipeline
-```
-┌───────────────────┐     ┌───────────┐     ┌─────────────────┐     ┌──────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ User Speech Input │ ──▶ │ ASR Model │ ──▶ │ User Text Input │ ──▶ │ Meditron │ ──▶ │ Medical Response │ ──▶ │ Fine-tuned Qwen │ ──▶ │  Natural Speech │
-└───────────────────┘     └───────────┘     └─────────────────┘     └──────────┘     └──────────────────┘     └─────────────────┘     └─────────────────┘
-                                │                                        │                                             │
-                         [Speech-to-Text]                           [Medical AI]                              [Conversational TTS]
-```
-
-## Speech-to-Speech Capabilities
-
-MediTalk now supports **full voice interaction**, enabling natural spoken conversations with the medical AI:
-
-### Voice Input Options
-- **Browser Web Speech API** (Recommended) - Real-time speech recognition using browser capabilities
-- **OpenAI Whisper ASR** (Experimental) - Advanced speech-to-text model with high accuracy (may have compatibility issues on some hardware at the moment)
+MediTalk combines:
+- **Medical AI** (Meditron-7B or DialoGPT for testing) - Medical question answering
+- **Text-to-Speech** (Orpheus TTS) - Natural voice synthesis
+- **Speech Recognition** (Whisper ASR) - Voice input
+- **Web Interface** - Interactive testing platform
 
 ### Complete Voice Pipeline
 ```
-┌──────────────┐     ┌──────────┐     ┌──────────┐     ┌─────────────┐     ┌──────────────┐
-│ Voice Input  │ ──▶ │   ASR    │ ──▶ │ Meditron │ ──▶ │ Orpheus TTS │ ──▶ │ Voice Output │
-└──────────────┘     └──────────┘     └──────────┘     └─────────────┘     └──────────────┘
-       │                   │                 │                  │                   │
-   [Speak]           [Transcribe]      [Generate]         [Synthesize]         [Listen]
+Voice Input ──▶ Speech-to-Text ──▶ Meditron ──▶ TTS ──▶ Voice Output
 ```
-
-## TTS Model Testing Framework
-
-This baseline pipeline enables systematic evaluation of different TTS approaches:
-
-### Currently Implemented
-- **Orpheus TTS** - Advanced neural TTS with paralinguistic capabilities
-- **Meditron Integration** - Medical knowledge + voice synthesis
-- **Speech-to-Speech Interface** - Complete voice interaction pipeline with ASR
-- **Evaluation Interface** - Web UI for testing and comparison
-
-### Planned TTS Models for Testing
-- **CoquiTTS** - Open-source TTS with custom voice training
-- **Bark** - Transformer-based TTS with emotional control
-- **XTTS** - Multilingual voice cloning
-
-### Future: Conversational Speech Models
-- **Qwen Fine-tuning** - Direct conversational speech generation
-- **Context-Aware Prosody** - Tone adaptation for medical contexts
-- **Dialogue State Integration** - Conversational history awareness
 
 ## Quick Start
 
 ### Prerequisites
-- **Docker** & **Docker Compose** installed
-- **16GB+ RAM** (for full Meditron-7B) or **8GB** (for DialoGPT baseline)
-- **HuggingFace account** with access token
+- **Python 3.10+** (for local) or **Docker** (for containerized)
+- **HuggingFace account** with token ([get one here](https://huggingface.co/settings/tokens))
+- **16GB+ RAM** recommended for Meditron-7B (or 8GB for DialoGPT)
 
-### Step 1: Configure Environment
-Create a `.env` file in the project root:
+### 1. Configure Environment
+
+Create a `.env` file:
 ```bash
-HUGGINGFACE_TOKEN=your_token_here
+HUGGINGFACE_TOKEN=your_token_here # HuggingFace access token
 MEDITRON_MODEL=microsoft/DialoGPT-medium  # or epfl-llm/meditron-7b
-ORPHEUS_MODEL=canopylabs/orpheus-3b-0.1-ft
-WHISPER_MODEL=tiny  # or base, small, medium, large
+ORPHEUS_MODEL=canopylabs/orpheus-3b-0.1-ft 
+WHISPER_MODEL=tiny # or base, small, medium, large
 ```
-
-### Step 2: Launch Services
-```bash
-# Make the startup script executable
-chmod +x start-meditalk.sh
-
-# Start all services
-./start-meditalk.sh
-```
-
-The script will:
-1. Check Docker installation
-2. Build all service containers
-3. Start the complete pipeline
-4. Open the web interface at http://localhost:8080
-
-### Step 3: Test the System
-1. Navigate to **http://localhost:8080**
-2. **Text Input**: Type a medical question directly
-2-bis. **Voice Input**: Use speech recognition to ask questions by voice
-   - Select between Browser API (recommended) or Whisper ASR (experimental)
-   - Click the microphone button and speak your question
-3. Select TTS voice (Tara/Nova)
-4. Generate response and listen to audio
-5. Evaluate quality and naturalness
 
 ## Deployment Options
 
-### Local Development
-Use Docker Compose for local testing and development:
+### Option A: Local Deployment (No Docker)
+
+Note: This is the recommended option for the EPFL RCP cluster (see RCP Cluster Deployment section below).
+
+**Setup (first run only):**
+```bash
+./setup-local.sh
+```
+
+**Start:**
+```bash
+./start-local.sh
+```
+
+**Monitor:**
+```bash
+# Check service health
+./health-check.sh
+
+# View logs
+tail -f logs/modelMeditron.log # Monitor Meditron
+tail -f logs/modelOrpheus.log # Monitor OrpheusTTS
+tail -f logs/modelWhisper.log # Monitor Whisper
+tail -f logs/webui.log # Monitor Web UI
+```
+
+**Stop:**
+```bash
+./stop-local.sh
+```
+
+### Option B: Docker Deployment
+
+Note: We had reasons to believe this option may not work on the EPFL RCP cluster. We recommend using local deployment instead.
+
+**Start:**
 ```bash
 ./start-meditalk.sh
 ```
-Access at http://localhost:8080
 
-### EPFL RCP Cluster
-Deploy MediTalk on the EPFL Research Computing Platform with GPU acceleration:
-
-📚 **[Complete RCP Deployment Guide →](rcp/README-RCP.md)**
-
-Quick start:
+**Monitor:**
 ```bash
-# Configure and build
-cp rcp/configs/.env.rcp.example rcp/configs/.env.rcp
-# Edit .env.rcp with your GASPAR username
-./rcp/scripts/build_images.sh
-./rcp/scripts/push_images.sh
+# Check service status
+docker compose -f docker/docker-compose.yml ps
 
-# Deploy to cluster
-./rcp/scripts/submit_all.sh
+# View logs
+docker compose -f docker/docker-compose.yml logs -f meditron
+docker compose -f docker/docker-compose.yml logs -f orpheus
+docker compose -f docker/docker-compose.yml logs -f whisper
+docker compose -f docker/docker-compose.yml logs -f webui
 
-# Access web UI
-./rcp/scripts/port_forward.sh
+# Check health
+curl http://localhost:5006/health  # Meditron
+curl http://localhost:5005/health  # Orpheus TTS
+curl http://localhost:5007/health  # Whisper ASR
 ```
+
+**Stop:**
+```bash
+docker compose -f docker/docker-compose.yml down
+```
+
+## RCP Cluster Deployment
+
+For deployment on the EPFL RCP cluster, please refer to the [LiGHT RCP Documentation](https://epflight.github.io/LiGHT-doc/clusters/rcp/) for setup instructions. After setting up the environment, you can clone this repository and follow the Local Deployment steps above to run MediTalk on the cluster.
+
+Recommendation: Use option A (Local Deployment) as Docker deployment may not be supported on the RCP cluster.
 
 ## Services Architecture
 
-### Active Services (Phase 1)
+| Service | Port | Purpose |
+|---------|------|---------|
+| **Web UI** | 8080 | Interactive interface |
+| **Meditron** | 5006 | Medical Q&A |
+| **OrpheusTTS** | 5005 | Text-to-speech |
+| **Whisper** | 5007 | Speech recognition |
 
-| Service | Port | Purpose | Status |
-|---------|------|---------|---------|
-| **Web UI** | 8080 | Interactive evaluation interface | Active |
-| **Meditron AI** | 5006 | Medical question answering | Active |
-| **Orpheus TTS** | 5005 | Neural text-to-speech synthesis | Active |
-| **Whisper ASR** | 5007 | Speech-to-text transcription | Active |
+## Model Configuration
 
-### Future Services (Phase 2+)
-
-| Service | Port | Purpose | Status |
-|---------|------|---------|---------|
-| **CoquiTTS** | 5001 | Alternative TTS evaluation | Planned |
-| **Bark TTS** | 5002 | Emotional TTS testing | Planned |
-| **TTS Evaluator** | 5009 | Automated quality metrics | Planned |
-| **Qwen Speech** | 5008 | Conversational speech generation | Research |
-
-## Medical AI Configuration
-
-### Phase 1: Lightweight Baseline
-- **Model**: `microsoft/DialoGPT-medium`
-- **Size**: ~345MB
-- **RAM**: 1-2GB
-- **Purpose**: Pipeline validation and basic TTS testing
-
-### Phase 2: Full Medical Knowledge
-- **Model**: `epfl-llm/meditron-7b`
-- **Size**: ~14GB
-- **RAM**: 14GB+
-- **Purpose**: Baseline models evaluation with real Meditron model
-
-### Phase 3: Conversational Speech
-- **Model**: `Qwen-?` (fine-tuned)
-- **Approach**: Direct conversational speech generation
-- **Purpose**: Natural medical dialogue with context awareness using Meditron + fine-tuned Qwen
-
-### Switching Models
-Edit `.env` file:
+### Lightweight (Development)
+Note: DialoGPT was used for initial testing due to resource constraints.
 ```bash
-# For lightweight testing
-MEDITRON_MODEL=microsoft/DialoGPT-medium
-
-# For full medical AI
-MEDITRON_MODEL=epfl-llm/meditron-7b
+MEDITRON_MODEL=microsoft/DialoGPT-medium  # ~345MB, 1-2GB RAM
 ```
 
-Then restart services:
+### Meditron (Recommended)
+Note: The actual model this project focuses on.
 ```bash
-docker compose -f docker/docker-compose.yml restart meditron
+MEDITRON_MODEL=epfl-llm/meditron-7b  # ~14GB, 16GB+ RAM
 ```
 
-## Research Methodology
+Switch models by editing `.env` and restarting services.
 
-### Phase 1: Baseline TTS Evaluation Pipeline (Current)
-- [x] Set up Dockerized services
-- [x] Set up Meditron + Orpheus TTS pipeline
-- [x] Create web-based evaluation interface
-- [x] Implement speech-to-speech pipeline with ASR
-- [x] Add Browser Web Speech API integration
-- [x] Add Whisper ASR service (experimental)
-- [ ] Establish baseline performance metrics
-- [ ] Document quality benchmarks
+## API Usage
 
-### Phase 2: Existing TTS/CSM Comparison and Evaluation (Next)
-- [ ] Integrate CoquiTTS, Bark, XTTS
-- [ ] Implement automated quality assessment
-- [ ] Conduct comparative analysis (MOS)
-- [ ] Document strengths/weaknesses of each approach
+Notes: 
+- We recommend using the Web UI for easier interaction. Below are example `curl` commands for direct API access.
+- Make sure services are running before making requests. (See Deployment Options above and Health Check)
 
-### Phase 3: Qwen Fine-tuning Research (Future)
-- [ ] Collect (medical?) conversational speech data
-- [ ] Design fine-tuning strategy for Qwen
-- [ ] Implement Meditron + Qwen pipeline
-- [ ] Evaluate conversational quality and medical tone
-- [ ] Compare against baseline TTS approaches
-
-## API Documentation
-
-### Whisper ASR Service (Port 5007)
-
-#### POST `/transcribe` - Speech-to-Text
-```bash
-curl -X POST "http://localhost:5007/transcribe" \
-  -F "file=@audio.wav"
-```
-
-**Response:**
-```json
-{
-  "transcription": "What is hypertension?"
-}
-```
-
-#### GET `/health` - Check Service Status
-```bash
-curl http://localhost:5007/health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "model": "tiny"
-}
-```
-
-### Meditron Service (Port 5006)
-
-#### POST `/ask` - Generate Medical Response
+### Medical AI Query
 ```bash
 curl -X POST "http://localhost:5006/ask" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What is hypertension?",
-    "max_length": 512,
-    "temperature": 0.7,
     "generate_audio": true,
     "voice": "tara"
   }'
 ```
 
-**Response:**
-```json
-{
-  "question": "What is hypertension?",
-  "answer": "Hypertension, also known as high blood pressure...",
-  "audio_file": "orpheus_output_1234.wav",
-  "audio_url": "http://localhost:5005/audio/orpheus_output_1234.wav"
-}
-```
+Parameters:
+- `question`: Medical question to ask
+- `generate_audio`: (bool) Whether to generate spoken response
+- `voice`: Voice model to use for TTS (default: "tara", other voices may be available later)
 
-#### GET `/health` - Check Service Status
-```bash
-curl http://localhost:5006/health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "model": "microsoft/DialoGPT-medium"
-}
-```
-
-### Orpheus TTS Service (Port 5005)
-
-#### POST `/synthesize` - Generate Speech
+### Text-to-Speech
 ```bash
 curl -X POST "http://localhost:5005/synthesize" \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "Medical response text here",
+    "text": "Hello, this is MediTalk",
     "voice": "tara"
   }'
 ```
 
-**Response:**
-```json
-{
-  "audio_file": "orpheus_output_5678.wav",
-  "audio_url": "http://localhost:5005/audio/orpheus_output_5678.wav"
-}
+Parameters:
+- `text`: Text to convert to speech
+- `voice`: Voice model to use (default: "tara") 
+
+### Speech-to-Text
+```bash
+curl -X POST "http://localhost:5007/transcribe" \
+  -F "file=@audio.wav"
+```
+Parameters:
+- `file`: Audio file to transcribe (WAV format recommended, other formats were not tested)
+
+## Troubleshooting
+
+### Local Deployment Issues
+
+**Service won't start:**
+```bash
+# Check virtual environment
+ls services/modelMeditron/venv
+
+# Reinstall dependencies
+cd services/modelMeditron
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-#### GET `/audio/{filename}` - Download Audio File
+**Model loading errors:**
+- Verify HuggingFace token in `.env`
+- Check disk space (models are large)
+- Review service logs in `logs/` directory
+
+**Speech recognition issues:**
+ 
+- ```bash
+  # Ensure ffmpeg is installed:
+  which ffmpeg
+
+  # Install if missing:
+  sudo apt-get install ffmpeg
+  ```
+- Check audio file format (WAV recommended)
+
+### Docker Deployment Issues
+
+**Memory errors (Exit Code 137):**
 ```bash
-curl -O http://localhost:5005/audio/orpheus_output_1234.wav
+# This indicates out-of-memory issues.
+# Switch to lighter model
+MEDITRON_MODEL=microsoft/DialoGPT-medium
+```
+
+**Container won't start:**
+```bash
+# Check Docker resources
+docker stats
+
+# Rebuild containers
+docker compose -f docker/docker-compose.yml build --no-cache
 ```
 
 ## Development
 
 ### Project Structure
 ```
-MediTalk/
-├── docker/
-│   ├── docker-compose.yml      # Service orchestration
-│   └── Dockerfile.base         # Base image configuration
+MediTalk-NoDocker/
+├── .env                    # Environment configuration
 ├── services/
-│   ├── modelMeditron/          # Medical AI service
-│   │   ├── app.py             # FastAPI server
-│   │   ├── meditron.py        # AI model wrapper
-│   │   └── requirements.txt
-│   ├── modelOrpheus/           # TTS service
-│   │   ├── app.py             # FastAPI server
-│   │   ├── infer.py           # TTS inference
-│   │   └── requirements.txt
-│   ├── modelWhisper/           # ASR service
-│   │   ├── app.py             # FastAPI server
-│   │   └── requirements.txt
-│   └── webui/                  # Web interface
-│       ├── app.py             # FastAPI backend
-│       ├── templates/         # HTML templates
-│       └── requirements.txt
-├── outputs/
-│   └── orpheus/               # Generated audio files
-├── .env                       # Environment configuration
-├── start-meditalk.sh         # Startup script
-└── README.md                 # This file
+│   ├── modelMeditron/     # Medical AI service
+│   ├── modelOrpheus/      # TTS service
+│   ├── modelWhisper/      # ASR service
+│   └── webui/             # Web interface
+├── docker/                # Docker configuration
+├── logs/                  # Service logs (local mode)
+├── outputs/               # Generated audio files
+├── setup-local.sh         # Local setup script
+├── start-local.sh         # Local start script
+├── health-check.sh        # Local health check script
+├── stop-local.sh          # Local stop script
+└── start-meditalk.sh      # Docker start script
 ```
 
-### Service Management
+### Key Files
 
-#### Start/Stop Services
-```bash
-# Start all services
-./start-meditalk.sh
+**Local Mode:**
+- `setup-local.sh` - Creates virtual environments and installs dependencies
+- `start-local.sh` - Starts all services in background
+- `stop-local.sh` - Stops all running services
+- `health-check.sh` - Checks service health status
 
-# Stop all services
-docker compose -f docker/docker-compose.yml down
+**Docker Mode:**
+- `start-meditalk.sh` - Builds and starts Docker containers
+- `docker/docker-compose.yml` - Service orchestration
+- `docker/Dockerfile.base` - Base image configuration (see individual service Dockerfiles for specifics on each service)
 
-# Restart specific service
-docker compose -f docker/docker-compose.yml restart meditron
-docker compose -f docker/docker-compose.yml restart orpheus
-docker compose -f docker/docker-compose.yml restart webui
-```
 
-#### View Logs
-```bash
-# All services
-docker compose -f docker/docker-compose.yml logs -f
+## Research Context
 
-# Specific service
-docker compose -f docker/docker-compose.yml logs -f meditron
-docker compose -f docker/docker-compose.yml logs -f orpheus
-docker compose -f docker/docker-compose.yml logs -f webui
-```
+### Current Phase: Baseline TTS Evaluation
+This implementation tests existing TTS models (Orpheus, other TTS models later) with Meditron to establish performance benchmarks.
 
-#### Health Monitoring
-```bash
-# Check service health
-curl http://localhost:5006/health  # Meditron
-curl http://localhost:5005/health  # Orpheus
-curl http://localhost:5007/health  # Whisper ASR
-curl http://localhost:8080         # Web UI
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `HUGGINGFACE_TOKEN` | Yes | - | HuggingFace API authentication |
-| `MEDITRON_MODEL` | No | `microsoft/DialoGPT-medium` | Medical AI model identifier |
-| `ORPHEUS_MODEL` | No | `canopylabs/orpheus-3b-0.1-ft` | TTS model identifier |
-| `WHISPER_MODEL` | No | `tiny` | Whisper ASR model size (tiny/base/small) |
-
-### Hardware Requirements
-
-#### Minimum (DialoGPT Basic Pipeline)
-- **RAM**: 8GB
-- **Storage**: 10GB
-- **CPU**: 4 cores
-- **GPU**: Not required
-
-#### Recommended (Meditron-7B)
-- **RAM**: 16GB+
-- **Storage**: 50GB+
-- **CPU**: 8+ cores
-- **GPU**: Optional (CUDA-compatible for faster inference)
-
-## Troubleshooting
-
-### Common Issues
-
-#### Memory Errors (Exit Code 137)
-**Symptom**: Container exits with code 137
-**Solution**: Switch to lighter model
-```bash
-echo "MEDITRON_MODEL=microsoft/DialoGPT-medium" >> .env
-./start-meditalk.sh
-```
-
-#### HuggingFace Authentication Errors
-**Symptom**: "401 Unauthorized" or token errors
-**Solution**: Verify your token
-```bash
-curl -H "Authorization: Bearer $HUGGINGFACE_TOKEN" \
-     https://huggingface.co/api/whoami-v2
-```
-
-#### Service Connection Issues
-**Symptom**: Cannot connect to services
-**Solution**: Check service status
-```bash
-docker compose -f docker/docker-compose.yml ps
-curl http://localhost:5006/health
-curl http://localhost:5005/health
-```
-
-#### Audio Generation Fails
-**Symptom**: No audio output or synthesis errors
-**Solution**: Check Orpheus logs
-```bash
-docker compose -f docker/docker-compose.yml logs orpheus
-
-# Test direct synthesis
-curl -X POST "http://localhost:5005/synthesize" \
-     -H "Content-Type: application/json" \
-     -d '{"text": "test audio", "voice": "tara"}'
-```
-
-#### Speech Recognition Issues
-**Symptom**: Voice input not working
-**Solution**: 
-1. Use Browser Web Speech API (recommended) - works reliably in Chrome/Edge
-2. For Whisper ASR issues, check logs:
-```bash
-docker compose -f docker/docker-compose.yml logs whisper
-
-# Test Whisper transcription
-curl -X POST "http://localhost:5007/transcribe" \
-     -F "file=@test_audio.wav"
-```
-
-**Note**: Whisper ASR may have compatibility issues on some hardware. Browser Web Speech API is recommended as a temporary solution.
-
-### Performance Optimization
-
-#### Faster Response Times
-- Reduce `max_length` parameter (shorter responses)
-- Lower `temperature` value (more focused responses)
-- Disable audio generation for text-only testing
-
-#### Memory Management
-- Use DialoGPT-medium for development
-- Enable Docker resource limits in docker-compose.yml
-- Monitor with `docker stats`
+### Future Phase: Conversational Speech AI
+Goal: Fine-tune Qwen model for end-to-end conversational speech generation with medical context awareness.
 
 ## Acknowledgments
 
@@ -485,6 +285,8 @@ curl -X POST "http://localhost:5007/transcribe" \
 
 ---
 
-**MediTalk** - Empowering medical AI (Meditron) with natural conversational speech capabilities.
+---
 
-*Semester Research Project | Nicolas Teissier | EPFL*
+**MediTalk** - Empowering medical AI with natural conversational speech.
+
+*Research Project | Nicolas Teissier | EPFL*
