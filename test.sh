@@ -1,0 +1,16 @@
+runai submit \
+  --name meditron-basic \
+  --image registry.rcp.epfl.ch/multimeditron/basic:latest-teissier\
+  --pvc light-scratch:/mloscratch \
+  --large-shm \
+  -e NAS_HOME=/mloscratch/users/teissier \
+  -e HF_API_KEY_FILE_AT=/mloscratch/users/teissier/keys/hf_key.txt \
+  -e WANDB_API_KEY_FILE_AT=/mloscratch/users/teissier/keys/wandb_key.txt \
+  -e GITCONFIG_AT=/mloscratch/users/teissier/.gitconfig \
+  -e GIT_CREDENTIALS_AT=/mloscratch/users/teissier/.git-credentials \
+  -e VSCODE_CONFIG_AT=/mloscratch/users/teissier/.vscode-server \
+  --backoff-limit 0 \
+  --run-as-gid 84257 \
+  --node-pool h100 \
+  --gpu 1 \
+  -- sleep infinity

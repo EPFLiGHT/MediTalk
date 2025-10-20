@@ -1,0 +1,4 @@
+requests
+soundfile
+pandas
+numpy

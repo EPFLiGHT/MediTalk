@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediTalk - Medical AI with Voice</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { color: #2c3e50; font-size: 2.5em; margin-bottom: 10px; }
+        .header p { color: #7f8c8d; font-size: 1.2em; }
+        .chat-container { background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 30px; }
+        .question-form { margin-bottom: 30px; }
+        .question-input { width: 100%; padding: 15px; border: 2px solid #e0e6ed; border-radius: 10px; font-size: 16px; resize: vertical; min-height: 100px; }
+        .question-input:focus { outline: none; border-color: #3498db; }
+        .controls { display: flex; gap: 15px; margin-top: 15px; align-items: center; flex-wrap: wrap; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; transition: all 0.3s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .voice-select { padding: 10px; border: 2px solid #e0e6ed; border-radius: 8px; font-size: 14px; }
+        .response-section { margin-top: 30px; }
+        .response-card { background: #f8f9fa; border-left: 4px solid #3498db; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .response-text { line-height: 1.6; color: #2c3e50; }
+        .audio-section { margin-top: 20px; padding: 20px; background: #ecf0f1; border-radius: 8px; }
+        .audio-controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+        .audio-info { font-size: 12px; color: #7f8c8d; margin-top: 10px; }
+        .play-button { background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .play-button:hover { background: #219a52; }
+        .download-button { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; }
+        .download-button:hover { background: #2980b9; }
+        .loading { text-align: center; padding: 40px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .error { background: #e74c3c; color: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .success { background: #27ae60; color: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .status-indicators { display: flex; gap: 20px; margin-bottom: 30px; justify-content: center; flex-wrap: wrap; }
+        .status-indicator { padding: 10px 15px; border-radius: 20px; font-size: 14px; }
+        .status-healthy { background: #d4edda; color: #155724; }
+        .status-unhealthy { background: #f8d7da; color: #721c24; }
+        
+        /* Speech Recognition Styles */
+        .speech-controls { display: flex; gap: 10px; align-items: center; margin-top: 15px; flex-wrap: wrap; }
+        .btn-speech { background: #e74c3c; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; transition: all 0.3s; }
+        .btn-speech:hover { background: #c0392b; }
+        .btn-speech.recording { background: #27ae60; animation: pulse 1.5s infinite; }
+        .btn-speech:disabled { background: #95a5a6; cursor: not-allowed; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
+        .speech-status { font-size: 14px; color: #7f8c8d; margin-left: 10px; }
+        .speech-transcript { background: #f1f2f6; border: 2px solid #ddd; border-radius: 8px; padding: 10px; margin-top: 10px; min-height: 40px; font-style: italic; color: #555; }
+        .speech-method-select { padding: 8px; border: 2px solid #e0e6ed; border-radius: 6px; font-size: 14px; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MediTalk</h1>
+            <p>Medical AI Assistant with Voice Response</p>
+        </div>
+
+        <div id="status-section" class="status-indicators"></div>
+
+        <div class="chat-container">
+            <form id="questionForm" class="question-form">
+                <textarea 
+                    id="questionInput" 
+                    class="question-input" 
+                    placeholder="Ask your medical question here... (e.g., 'What are the symptoms of diabetes?', 'How to treat a common cold?')"
+                    required
+                ></textarea>
+                
+                <div class="controls">
+                    <button type="submit" class="btn btn-primary" id="askBtn">
+                        Ask Meditron
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="clearBtn">
+                        Clear
+                    </button>
+                    
+                    <label>
+                        <input type="checkbox" id="generateAudio" checked> Generate Audio
+                    </label>
+                    
+                    <select id="voiceSelect" class="voice-select">
+                        <option value="tara">Tara (Default)</option>
+                    </select>
+                </div>
+                
+                <!-- Speech Recognition Controls -->
+                <div class="speech-controls">
+                    <button type="button" class="btn-speech" id="speechBtn">
+                        Start Speaking
+                    </button>
+                    <select id="speechMethod" class="speech-method-select">
+                        <option value="browser" selected>Browser Speech API (Recommended)</option>
+                        <option value="whisper">Whisper ASR (Experimental - may crash)</option>
+                    </select>
+                    <span id="speechStatus" class="speech-status">Ready to listen</span>
+                </div>
+                
+                <div id="speechTranscript" class="speech-transcript" style="display: none;">
+                    Transcript will appear here...
+                </div>
+            </form>
+
+            <div id="responseSection" class="response-section" style="display: none;">
+                <div id="responseCard" class="response-card">
+                    <h3>Medical Response:</h3>
+                    <div id="responseText" class="response-text"></div>
+                    
+                    <div id="audioSection" class="audio-section" style="display: none;">
+                        <h4>Audio Response:</h4>
+                        <audio id="audioPlayer" controls preload="metadata" style="width: 100%; margin-top: 10px;">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <div class="audio-controls">
+                            <button id="playButton" class="play-button" onclick="togglePlayPause()">Play</button>
+                            <a id="downloadButton" class="download-button" href="#" download>Download</a>
+                        </div>
+                        <div class="audio-info">
+                            <small>Generated by Orpheus TTS • Click play to listen directly in your browser</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loadingSection" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p style="margin-top: 20px;">Processing your medical question...</p>
+                <p><small>⏱️ Generating AI response and high-quality audio synthesis (may take up to 10 minutes)</small></p>
+                <p><small>🎵 Please be patient - creating natural medical speech requires significant processing time</small></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check service health on page load
+        async function checkServiceHealth() {
+            const statusSection = document.getElementById('status-section');
+            const services = [
+                { name: 'Meditron AI', url: '/api/meditron/health' },
+                { name: 'Orpheus TTS', url: '/api/orpheus/health' },
+                { name: 'Whisper ASR', url: '/api/whisper/health' }
+            ];
+            
+            let statusHTML = '';
+            for (const service of services) {
+                try {
+                    const response = await fetch(service.url);
+                    const data = await response.json();
+                    const isHealthy = data.status === 'healthy';
+                    statusHTML += `<div class="status-indicator ${isHealthy ? 'status-healthy' : 'status-unhealthy'}">
+                        ${service.name}: ${isHealthy ? 'Online' : 'Offline'}
+                    </div>`;
+                } catch {
+                    statusHTML += `<div class="status-indicator status-unhealthy">
+                        ${service.name}: Offline
+                    </div>`;
+                }
+            }
+            statusSection.innerHTML = statusHTML;
+        }
+
+        // Handle form submission
+        document.getElementById('questionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('questionInput').value;
+            const generateAudio = document.getElementById('generateAudio').checked;
+            const voice = document.getElementById('voiceSelect').value;
+            
+            // Show loading
+            document.getElementById('loadingSection').style.display = 'block';
+            document.getElementById('responseSection').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/meditron/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        generate_audio: generateAudio,
+                        voice: voice
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Request failed');
+                
+                const data = await response.json();
+                
+                // Display response
+                document.getElementById('responseText').innerHTML = data.answer.replace(/\n/g, '<br>');
+                document.getElementById('responseSection').style.display = 'block';
+                
+                // Handle audio if available
+                const audioSection = document.getElementById('audioSection');
+                if (data.audio_url) {
+                    const audioPlayer = document.getElementById('audioPlayer');
+                    const downloadButton = document.getElementById('downloadButton');
+                    
+                    audioPlayer.src = data.audio_url;
+                    downloadButton.href = data.audio_url;
+                    downloadButton.download = data.audio_file || 'meditalk_response.wav';
+                    
+                    audioSection.style.display = 'block';
+                    
+                    // Auto-load the audio for immediate playability
+                    audioPlayer.load();
+                } else {
+                    audioSection.style.display = 'none';
+                }
+                
+            } catch (error) {
+                document.getElementById('responseSection').innerHTML = 
+                    `<div class="error">Error: ${error.message}</div>`;
+                document.getElementById('responseSection').style.display = 'block';
+            }
+            
+            // Hide loading
+            document.getElementById('loadingSection').style.display = 'none';
+        });
+
+        // Clear button
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('questionInput').value = '';
+            document.getElementById('responseSection').style.display = 'none';
+        });
+
+        // Audio control functions
+        function togglePlayPause() {
+            const audioPlayer = document.getElementById('audioPlayer');
+            const playButton = document.getElementById('playButton');
+            
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                playButton.textContent = 'Pause';
+            } else {
+                audioPlayer.pause();
+                playButton.textContent = 'Play';
+            }
+        }
+
+        // Audio event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const audioPlayer = document.getElementById('audioPlayer');
+            const playButton = document.getElementById('playButton');
+            
+            audioPlayer.addEventListener('ended', function() {
+                playButton.textContent = 'Play';
+            });
+            
+            audioPlayer.addEventListener('pause', function() {
+                playButton.textContent = 'Play';
+            });
+            
+            audioPlayer.addEventListener('play', function() {
+                playButton.textContent = 'Pause';
+            });
+        });
+
+        // Check health on page load
+        checkServiceHealth();
+        
+        // ===== SPEECH RECOGNITION FUNCTIONALITY =====
+        
+        let recognition = null;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        
+        // Initialize Speech Recognition
+        function initSpeechRecognition() {
+            // Check for Web Speech API support
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+                
+                recognition.onstart = function() {
+                    updateSpeechStatus('Listening... speak now');
+                    document.getElementById('speechBtn').classList.add('recording');
+                };
+                
+                recognition.onresult = function(event) {
+                    let transcript = '';
+                    for (let i = 0; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    
+                    document.getElementById('speechTranscript').style.display = 'block';
+                    document.getElementById('speechTranscript').textContent = transcript;
+                    
+                    // If final result, insert into question input
+                    if (event.results[event.results.length - 1].isFinal) {
+                        document.getElementById('questionInput').value = transcript;
+                        stopSpeechRecognition();
+                    }
+                };
+                
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error:', event.error);
+                    updateSpeechStatus(`Error: ${event.error}`);
+                    stopSpeechRecognition();
+                };
+                
+                recognition.onend = function() {
+                    stopSpeechRecognition();
+                };
+            }
+        }
+        
+        // Update speech status
+        function updateSpeechStatus(message) {
+            document.getElementById('speechStatus').textContent = message;
+        }
+        
+        // Start speech recognition
+        function startSpeechRecognition() {
+            const method = document.getElementById('speechMethod').value;
+            
+            if (method === 'browser') {
+                startBrowserSpeechRecognition();
+            } else if (method === 'whisper') {
+                startWhisperRecognition();
+            }
+        }
+        
+        // Browser Speech Recognition
+        function startBrowserSpeechRecognition() {
+            if (!recognition) {
+                updateSpeechStatus('Speech recognition not supported in this browser');
+                return;
+            }
+            
+            if (isRecording) {
+                stopSpeechRecognition();
+                return;
+            }
+            
+            isRecording = true;
+            document.getElementById('speechBtn').textContent = '🛑 Stop Speaking';
+            updateSpeechStatus('Requesting microphone access...');
+            
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('Failed to start recognition:', error);
+                updateSpeechStatus('Failed to start recognition');
+                stopSpeechRecognition();
+            }
+        }
+        
+        // Whisper Speech Recognition
+        async function startWhisperRecognition() {
+            if (isRecording) {
+                stopWhisperRecording();
+                return;
+            }
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = function(event) {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async function() {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    await sendAudioToWhisper(audioBlob);
+                    
+                    // Stop all tracks to release microphone
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                isRecording = true;
+                document.getElementById('speechBtn').textContent = '🛑 Stop Recording';
+                document.getElementById('speechBtn').classList.add('recording');
+                updateSpeechStatus('Recording... speak now');
+                
+                mediaRecorder.start();
+                
+            } catch (error) {
+                console.error('Microphone access denied:', error);
+                updateSpeechStatus('Microphone access denied');
+                stopSpeechRecognition();
+            }
+        }
+        
+        // Send audio to Whisper service
+        async function sendAudioToWhisper(audioBlob) {
+            updateSpeechStatus('Transcribing audio...');
+            
+            try {
+                const formData = new FormData();
+                formData.append('audio_file', audioBlob, 'recording.wav');
+                
+                const response = await fetch('/api/whisper/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Whisper service error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                document.getElementById('speechTranscript').style.display = 'block';
+                document.getElementById('speechTranscript').textContent = data.text;
+                document.getElementById('questionInput').value = data.text;
+                
+                updateSpeechStatus('Transcription complete');
+                
+            } catch (error) {
+                console.error('Whisper transcription failed:', error);
+                updateSpeechStatus(`Transcription failed: ${error.message}`);
+            }
+        }
+        
+        // Stop Whisper recording
+        function stopWhisperRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            stopSpeechRecognition();
+        }
+        
+        // Stop speech recognition
+        function stopSpeechRecognition() {
+            isRecording = false;
+            document.getElementById('speechBtn').textContent = 'Start Speaking';
+            document.getElementById('speechBtn').classList.remove('recording');
+            updateSpeechStatus('Ready to listen');
+            
+            if (recognition && recognition.state !== 'inactive') {
+                recognition.stop();
+            }
+            
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        }
+        
+        // Speech button event listener
+        document.getElementById('speechBtn').addEventListener('click', startSpeechRecognition);
+        
+        // Initialize speech recognition on page load
+        initSpeechRecognition();
+    </script>
+</body>
+</html>
