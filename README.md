@@ -201,10 +201,16 @@ pip install -r requirements.txt
   # Ensure ffmpeg is installed:
   which ffmpeg
 
-  # Install if missing:
-  sudo apt-get install ffmpeg
+  # Install if missing (update package lists first to avoid 404 errors):
+  sudo apt-get update
+  sudo apt-get install -y ffmpeg
+  
+  # After installation, restart services to pick up ffmpeg in PATH:
+  ./stop-local.sh
+  ./start-local.sh
   ```
 - Check audio file format (WAV recommended)
+- Note: If you see "FileNotFoundError: 'ffmpeg'" in Whisper logs, the service needs to be restarted after ffmpeg installation to update its environment PATH
 
 ### Docker Deployment Issues
 
