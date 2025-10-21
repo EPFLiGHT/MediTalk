@@ -108,7 +108,7 @@ Answer:"""
             else:
                 response = full_response[len(prompt):].strip()
             
-            logger.info(f"Generated response ({len(response)} chars)")
+            logger.info(f"Generated response ({len(response)} chars): {response[:50]}...")
             return response
             
         except Exception as e:
