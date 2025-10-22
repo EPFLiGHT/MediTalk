@@ -9,14 +9,15 @@
 ## Overview
 
 MediTalk combines:
-- **Medical AI** (Meditron-7B or DialoGPT for testing) - Medical question answering
-- **Text-to-Speech** (Orpheus TTS) - Natural voice synthesis
+- **Meditron-7B** - Text-only medical question answering
+- **MultiMeditron** - Multimodal medical AI (text + images -> not supported yet)
+- **Text-to-Speech** - Orpheus TTS or Bark TTS
 - **Speech Recognition** (Whisper ASR) - Voice input
 - **Web Interface** - Interactive testing platform
 
 ### Complete Voice Pipeline
 ```
-Voice Input ──▶ Speech-to-Text ──▶ Meditron ──▶ TTS ──▶ Voice Output
+Voice/Text Input ──▶ Speech-to-Text ──▶ MultiMeditron ──▶ TTS ──▶ Voice Output
 ```
 
 ## Quick Start
@@ -31,10 +32,17 @@ Voice Input ──▶ Speech-to-Text ──▶ Meditron ──▶ TTS ──▶ 
 Create a `.env` file:
 ```bash
 HUGGINGFACE_TOKEN=your_token_here # HuggingFace access token
-MEDITRON_MODEL=microsoft/DialoGPT-medium  # or epfl-llm/meditron-7b
-ORPHEUS_MODEL=canopylabs/orpheus-3b-0.1-ft 
+MULTIMEDITRON_HF_TOKEN=your_token_here # For private MultiMeditron model
+MEDITRON_MODEL=epfl-llm/meditron-7b  # Text-only medical AI
+MULTIMEDITRON_MODEL=ClosedMeditron/Mulimeditron-End2End-CLIP-medical  # Multimodal AI
+ORPHEUS_MODEL=canopylabs/orpheus-3b-0.1-ft  # Medical TTS voice
 WHISPER_MODEL=tiny # or base, small, medium, large
 ```
+
+**Note:** You need access to:
+- [meta-llama/Meta-Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct) (gated)
+- [ClosedMeditron/Mulimeditron-End2End-CLIP-medical](https://huggingface.co/ClosedMeditron/Mulimeditron-End2End-CLIP-medical) (private)
+  --> The private MultiMeditron model can be requested from EPFL LiGHT lab team.
 
 ## Deployment Options
 
@@ -75,7 +83,7 @@ Note: We had reasons to believe this option may not work on the EPFL RCP cluster
 
 **Start:**
 ```bash
-./start-meditalk.sh
+./start-docker.sh
 ```
 
 **Monitor:**
@@ -110,26 +118,28 @@ Recommendation: Use option A (Local Deployment) as Docker deployment may not be 
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| **Web UI** | 8080 | Interactive interface |
-| **Meditron** | 5006 | Medical Q&A |
-| **OrpheusTTS** | 5005 | Text-to-speech |
-| **Whisper** | 5007 | Speech recognition |
+| **Web UI** | 8080 | Interactive interface with AI/TTS model selection |
+| **Meditron** | 5006 | Text-only medical Q&A |
+| **MultiMeditron** | 5009 | Multimodal medical AI |
+| **Orpheus TTS** | 5005 | Text-to-speech model|
+| **Bark TTS** | 5008 | Multilingual text-to-speech |
+| **Whisper ASR** | 5007 | Speech recognition |
 
 ## Model Configuration
 
-### Lightweight (Development)
-Note: DialoGPT was used for initial testing due to resource constraints.
-```bash
-MEDITRON_MODEL=microsoft/DialoGPT-medium  # ~345MB, 1-2GB RAM
-```
+### Speech Recognition
+- **OpenAI Whisper**: Multiple sizes available (tiny, base, small, medium, large)
 
-### Meditron (Recommended)
-Note: The actual model this project focuses on.
-```bash
-MEDITRON_MODEL=epfl-llm/meditron-7b  # ~14GB, 16GB+ RAM
-```
+### AI Models
+- **DialoGPT**: Lightweight conversational model for initial testing (~345MB, 1-2GB RAM)
+- **Meditron-7B**: Text-only medical Q&A (~14GB, 16GB+ RAM)
+- **MultiMeditron**: Multimodal (text + images -> not supported yet) medical AI (~8GB model + 8GB base LLM)
 
-Switch models by editing `.env` and restarting services.
+### TTS Models
+- **Orpheus**: Medical-focused voice (best for medical terminology)
+- **Bark**: Multilingual support with multiple voice presets
+
+Switch models by editing `.env` and restarting services or using the model selector in the Web UI.
 
 ## API Usage
 
@@ -248,7 +258,7 @@ MediTalk-NoDocker/
 ├── start-local.sh         # Local start script
 ├── health-check.sh        # Local health check script
 ├── stop-local.sh          # Local stop script
-└── start-meditalk.sh      # Docker start script
+└── start-docker.sh        # Docker start script
 ```
 
 ### Key Files
@@ -260,7 +270,7 @@ MediTalk-NoDocker/
 - `health-check.sh` - Checks service health status
 
 **Docker Mode:**
-- `start-meditalk.sh` - Builds and starts Docker containers
+- `start-docker.sh` - Builds and starts Docker containers
 - `docker/docker-compose.yml` - Service orchestration
 - `docker/Dockerfile.base` - Base image configuration (see individual service Dockerfiles for specifics on each service)
 

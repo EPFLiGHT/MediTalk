@@ -79,6 +79,9 @@ services/modelCosy/pretrained_models/
 *.pth
 *.whl
 
+# External repositories cloned as dependencies (DO NOT COMMIT)
+services/modelMultiMeditron/multimeditron/
+
 # Temporary files
 *.tmp
 *.temp

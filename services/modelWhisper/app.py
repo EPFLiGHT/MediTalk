@@ -6,8 +6,6 @@ import os
 import logging
 from pydantic import BaseModel
 from typing import Optional
-import subprocess
-import json
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -61,67 +59,25 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
             logger.info(f"Temporary file created at: {tmp_file_path}")
         
         try:
-            # Transcribe with Whisper using CLI to isolate from segfaults
-            logger.info("Starting transcription process via whisper CLI...")
+            # Transcribe with Whisper using the loaded model
+            logger.info("Starting transcription process using loaded Whisper model...")
             
-            # Get the base filename without extension
-            base_name = os.path.basename(tmp_file_path).replace(".wav", "")
-            output_dir = "/tmp"
-            
-            # Use whisper CLI in subprocess to avoid in-process segfaults
-            cmd = [
-                "whisper",
+            # Use the whisper model directly (already loaded at startup)
+            result = whisper_model.transcribe(
                 tmp_file_path,
-                "--model", os.getenv('WHISPER_MODEL', 'tiny'),
-                "--language", "en",
-                "--fp16", "False",
-                "--output_format", "txt",
-                "--output_dir", output_dir
-            ]
-            
-            logger.info(f"Running command: {' '.join(cmd)}")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60
+                language="en",
+                fp16=False
             )
             
-            logger.info(f"Return code: {result.returncode}")
-            logger.info(f"Stdout: {result.stdout[:500]}")
-            logger.info(f"Stderr: {result.stderr[:500]}")
+            text = result["text"].strip()
+            logger.info(f"Transcription completed: '{text[:100]}...'")
             
-            if result.returncode != 0:
-                logger.error(f"Whisper CLI failed with code {result.returncode}")
-                logger.error(f"Stdout: {result.stdout}")
-                logger.error(f"Stderr: {result.stderr}")
-                raise Exception(f"Whisper CLI failed: {result.stderr or result.stdout}")
-            
-            # Read the TXT output file
-            txt_file = os.path.join(output_dir, f"{base_name}.txt")
-            logger.info(f"Looking for output file: {txt_file}")
-            
-            if not os.path.exists(txt_file):
-                # Try alternative naming
-                txt_file = os.path.join(output_dir, f"{os.path.basename(tmp_file_path).replace('.wav', '')}.txt")
-                logger.info(f"Trying alternative: {txt_file}")
-            
-            if os.path.exists(txt_file):
-                with open(txt_file, 'r') as f:
-                    text = f.read().strip()
-                logger.info(f"Transcription completed: '{text[:100]}...'")
-                # Clean up TXT file
-                os.unlink(txt_file)
-            else:
-                # List files in output dir to debug
-                files = os.listdir(output_dir)
-                logger.error(f"Output file not found. Files in {output_dir}: {files[:10]}")
-                text = result.stdout.strip() if result.stdout else "Transcription failed"
+            # Get detected language (for info)
+            detected_language = result.get("language", "en")
             
             return TranscriptionResponse(
                 text=text,
-                language="en",
+                language=detected_language,
                 confidence=None
             )
             

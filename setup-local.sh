@@ -12,6 +12,40 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Check and install ffmpeg (required for Whisper audio processing)
+echo ""
+echo "Checking system dependencies..."
+if ! command -v ffmpeg &> /dev/null; then
+    echo "⚠ ffmpeg not found - required for Whisper audio transcription"
+    echo "Installing ffmpeg..."
+    
+    if command -v apt &> /dev/null; then
+        sudo apt update && sudo apt install -y ffmpeg
+    elif command -v apt-get &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y ffmpeg
+    elif command -v yum &> /dev/null; then
+        sudo yum install -y ffmpeg
+    elif command -v brew &> /dev/null; then
+        brew install ffmpeg
+    else
+        echo "ERROR: Could not install ffmpeg automatically."
+        echo "Please install ffmpeg manually:"
+        echo "  Ubuntu/Debian: sudo apt install ffmpeg"
+        echo "  CentOS/RHEL: sudo yum install ffmpeg"
+        echo "  macOS: brew install ffmpeg"
+        exit 1
+    fi
+    
+    if command -v ffmpeg &> /dev/null; then
+        echo "✓ ffmpeg installed successfully"
+    else
+        echo "ERROR: ffmpeg installation failed"
+        exit 1
+    fi
+else
+    echo "✓ ffmpeg is installed ($(ffmpeg -version | head -n1))"
+fi
+
 # Check if .env file exists
 if [ ! -f .env ]; then
     echo "ERROR: .env file not found!"
@@ -33,11 +67,12 @@ echo "✓ Environment configured successfully"
 
 # Create necessary directories
 mkdir -p outputs/orpheus
+mkdir -p outputs/bark
 mkdir -p models
 echo "✓ Created output directories"
 
 # Setup virtual environments for each service
-services=("webui" "modelMeditron" "modelOrpheus" "modelWhisper")
+services=("webui" "modelMeditron" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelWhisper")
 
 for service in "${services[@]}"; do
     echo ""

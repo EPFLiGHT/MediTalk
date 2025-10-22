@@ -74,15 +74,28 @@
                 
                 <div class="controls">
                     <button type="submit" class="btn btn-primary" id="askBtn">
-                        Ask Meditron
+                        Ask AI
                     </button>
                     <button type="button" class="btn btn-secondary" id="clearBtn">
                         Clear
                     </button>
                     
+                    <label for="aiModel" style="margin-right: 10px;">
+                        <strong>AI Model:</strong>
+                    </label>
+                    <select id="aiModel" class="voice-select">
+                        <option value="meditron">Meditron (Text Only)</option>
+                        <option value="multimeditron">MultiMeditron (Multimodal)</option>
+                    </select>
+                    
                     <label>
                         <input type="checkbox" id="generateAudio" checked> Generate Audio
                     </label>
+                    
+                    <select id="ttsModel" class="voice-select">
+                        <option value="orpheus">Orpheus TTS</option>
+                        <option value="bark">Bark TTS</option>
+                    </select>
                     
                     <select id="voiceSelect" class="voice-select">
                         <option value="tara">Tara (Default)</option>
@@ -143,6 +156,7 @@
             const services = [
                 { name: 'Meditron AI', url: '/api/meditron/health' },
                 { name: 'Orpheus TTS', url: '/api/orpheus/health' },
+                { name: 'Bark TTS', url: '/api/bark/health' },
                 { name: 'Whisper ASR', url: '/api/whisper/health' }
             ];
             
@@ -165,27 +179,88 @@
         }
 
         // Handle form submission
+        // TTS Model and Voice Management
+        const ttsVoices = {
+            orpheus: [
+                { value: 'tara', label: 'Tara (Default)' }
+            ],
+            bark: []  // Will be populated from API
+        };
+        
+        // Load Bark voices from API
+        async function loadBarkVoices() {
+            try {
+                const response = await fetch('/api/bark/voices');
+                const data = await response.json();
+                if (data.voices && data.voices.english) {
+                    ttsVoices.bark = data.voices.english.map(voice => ({
+                        value: voice,
+                        label: voice.replace('v2/', '').replace('_', ' ')
+                    }));
+                }
+            } catch (error) {
+                console.error('Failed to load Bark voices:', error);
+                // Fallback voices
+                ttsVoices.bark = [
+                    { value: 'v2/en_speaker_6', label: 'English Speaker 6' },
+                    { value: 'v2/en_speaker_0', label: 'English Speaker 0' },
+                    { value: 'v2/en_speaker_9', label: 'English Speaker 9' }
+                ];
+            }
+        }
+        
+        // Update voice options based on selected TTS model
+        function updateVoiceOptions() {
+            const ttsModel = document.getElementById('ttsModel').value;
+            const voiceSelect = document.getElementById('voiceSelect');
+            const voices = ttsVoices[ttsModel] || [];
+            
+            voiceSelect.innerHTML = '';
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.value;
+                option.textContent = voice.label;
+                voiceSelect.appendChild(option);
+            });
+        }
+        
+        // Initialize voices on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadBarkVoices();
+            updateVoiceOptions();
+            
+            // Listen for TTS model changes
+            document.getElementById('ttsModel').addEventListener('change', updateVoiceOptions);
+        });
+        
         document.getElementById('questionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const question = document.getElementById('questionInput').value;
             const generateAudio = document.getElementById('generateAudio').checked;
             const voice = document.getElementById('voiceSelect').value;
+            const ttsModel = document.getElementById('ttsModel').value;
+            const aiModel = document.getElementById('aiModel').value;
             
             // Show loading
             document.getElementById('loadingSection').style.display = 'block';
             document.getElementById('responseSection').style.display = 'none';
             
             try {
-                const response = await fetch('/api/meditron/ask', {
+                // Route to the selected AI service
+                const aiEndpoint = aiModel === 'multimeditron' ? '/api/multimeditron/ask' : '/api/meditron/ask';
+                
+                const response = await fetch(aiEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         question: question,
                         generate_audio: generateAudio,
-                        voice: voice
+                        voice: voice,
+                        tts_service: ttsModel  // Pass selected TTS service
                     })
                 });
+
                 
                 if (!response.ok) throw new Error('Request failed');
                 
@@ -195,9 +270,9 @@
                 document.getElementById('responseText').innerHTML = data.answer.replace(/\n/g, '<br>');
                 document.getElementById('responseSection').style.display = 'block';
                 
-                // Handle audio if available
+                // Handle audio if generated
                 const audioSection = document.getElementById('audioSection');
-                if (data.audio_url) {
+                if (generateAudio && data.audio_url) {
                     const audioPlayer = document.getElementById('audioPlayer');
                     const downloadButton = document.getElementById('downloadButton');
                     
@@ -206,9 +281,11 @@
                     downloadButton.download = data.audio_file || 'meditalk_response.wav';
                     
                     audioSection.style.display = 'block';
-                    
-                    // Auto-load the audio for immediate playability
                     audioPlayer.load();
+                    
+                    // Update the TTS info
+                    document.querySelector('.audio-info small').textContent = 
+                        `Generated by ${ttsModel === 'bark' ? 'Bark' : 'Orpheus'} TTS • Click play to listen directly in your browser`;
                 } else {
                     audioSection.style.display = 'none';
                 }

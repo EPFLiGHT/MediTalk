@@ -94,7 +94,7 @@ class OrpheusTTS:
                 generated = self.model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    max_new_tokens=1200,
+                    max_new_tokens=10000,  # Increased from 1200 to support longer audio (TODO: tune this value)
                     do_sample=True,
                     temperature=0.6,
                     top_p=0.95,

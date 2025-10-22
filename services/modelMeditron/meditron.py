@@ -70,7 +70,7 @@ class MeditronLLM:
         """Generate medical response using Meditron-7B"""
         try:
             # Format the prompt for medical context
-            prompt = f"""As a medical AI assistant, please provide a helpful and accurate response to the following medical question:
+            prompt = f"""As a medical AI assistant, please provide a helpful and accurate response to the following medical question in no more than 2 or 3 sentences:
 
 Question: {question}
 
@@ -102,13 +102,21 @@ Answer:"""
             # Decode and clean response
             full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             
-            # Extract only the generated part after "Answer:"
+            # Extract only the generated part after "Answer:" (TODO: part to re-think later)
             if "Answer:" in full_response:
                 response = full_response.split("Answer:")[-1].strip()
             else:
                 response = full_response[len(prompt):].strip()
             
             logger.info(f"Generated response ({len(response)} chars): {response[:50]}...")
+
+            # logger.info("Diffenrence between full response and voice response:")
+            # logger.info(f"Full response length: {len(full_response)}")
+            # logger.info(f"Voice response length: {len(response)}")
+            # logger.info("----------------------------------")
+            # logger.info(f"Full response content: {full_response}")
+            # logger.info("----------------------------------")
+            # logger.info(f"Voice response content: {response}")
             return response
             
         except Exception as e:
