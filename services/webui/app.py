@@ -228,11 +228,12 @@ async def proxy_audio(request: Request, filename: str, range: Optional[str] = He
         if response.status_code in [200, 206]:  # 206 for partial content
             # Prepare response headers for HTML5 audio compatibility
             response_headers = {
-                "Content-Type": "audio/wav",
+                "Content-Type": response.headers.get("Content-Type", "audio/wav"),
                 "Accept-Ranges": "bytes",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-                "Access-Control-Allow-Headers": "Range",
+                "Access-Control-Allow-Headers": "Range, Content-Type",
+                "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
                 "Cache-Control": "public, max-age=3600"
             }
             
@@ -243,12 +244,13 @@ async def proxy_audio(request: Request, filename: str, range: Optional[str] = He
                 response_headers["Content-Range"] = response.headers["content-range"]
                 
             status_code = response.status_code
-            logger.info(f"Successfully proxied audio file: {filename} (status: {status_code})")
+            logger.info(f"Successfully proxied audio file: {filename} (status: {status_code}, size: {response_headers.get('Content-Length', 'unknown')} bytes)")
             
             return Response(
                 content=response.content,
                 status_code=status_code,
-                headers=response_headers
+                headers=response_headers,
+                media_type="audio/wav"
             )
         else:
             logger.error(f"Audio file not found: {filename} (status: {response.status_code})")

@@ -6,6 +6,7 @@ import logging
 import numpy as np
 from scipy.io.wavfile import write as write_wav
 from typing import Optional
+import threading
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -17,10 +18,15 @@ app = FastAPI(title="Bark TTS Service", version="1.0.0")
 bark_generate_audio = None
 bark_preload_models = None
 
+# Task tracking for cancellation
+active_tasks = {}  # task_id -> {"cancelled": bool}
+tasks_lock = threading.Lock()
+
 class TTSRequest(BaseModel):
     text: str
     voice: str = "v2/en_speaker_6"  # BARK voice preset
     output_filename: Optional[str] = None
+    task_id: Optional[str] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -106,16 +112,35 @@ def split_text_for_bark(text: str, max_chars: int = 250) -> list:
     
     return chunks
 
+def is_task_cancelled(task_id: str) -> bool:
+    """Check if a task has been cancelled"""
+    with tasks_lock:
+        task = active_tasks.get(task_id)
+        return task["cancelled"] if task else False
+
 @app.post("/synthesize")
 async def synthesize_speech(request: TTSRequest):
     """
     Synthesize speech from text using Bark TTS.
     Automatically splits long texts into chunks to avoid truncation.
     """
-    if bark_generate_audio is None:
-        raise HTTPException(status_code=503, detail="Bark TTS model not loaded")
+    task_id = request.task_id
+    
+    # Register task if task_id provided
+    if task_id:
+        with tasks_lock:
+            active_tasks[task_id] = {"cancelled": False}
+        logger.info(f"Bark TTS task {task_id} started")
     
     try:
+        if bark_generate_audio is None:
+            raise HTTPException(status_code=503, detail="Bark TTS model not loaded")
+        
+        # Check cancellation before starting
+        if task_id and is_task_cancelled(task_id):
+            logger.info(f"Bark TTS task {task_id} cancelled before synthesis")
+            raise HTTPException(status_code=499, detail="Task cancelled by user")
+        
         logger.info(f"Synthesizing speech for text: {request.text[:50]}... (length: {len(request.text)} chars)")
         logger.info(f"Using voice preset: {request.voice}")
         
@@ -129,12 +154,22 @@ async def synthesize_speech(request: TTSRequest):
         # Generate audio for each chunk
         audio_arrays = []
         for i, chunk in enumerate(text_chunks):
+            # Check cancellation before each chunk
+            if task_id and is_task_cancelled(task_id):
+                logger.info(f"Bark TTS task {task_id} cancelled during chunk {i+1}/{len(text_chunks)}")
+                raise HTTPException(status_code=499, detail="Task cancelled by user")
+            
             logger.info(f"Generating chunk {i+1}/{len(text_chunks)}: {chunk[:50]}...")
             chunk_audio = bark_generate_audio(
                 chunk,
                 history_prompt=request.voice  # Voice preset (e.g., "v2/en_speaker_6")
             )
             audio_arrays.append(chunk_audio)
+        
+        # Check cancellation after generation
+        if task_id and is_task_cancelled(task_id):
+            logger.info(f"Bark TTS task {task_id} cancelled after audio generation")
+            raise HTTPException(status_code=499, detail="Task cancelled by user")
         
         # Concatenate all audio chunks
         if len(audio_arrays) > 1:
@@ -167,12 +202,20 @@ async def synthesize_speech(request: TTSRequest):
             "filepath": filepath,
             "url": f"/audio/{filename}"
         }
-        
+    
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during synthesis: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")
+    finally:
+        # Clean up task
+        if task_id:
+            with tasks_lock:
+                active_tasks.pop(task_id, None)
+            logger.info(f"Bark TTS task {task_id} cleaned up")
 
 @app.get("/audio/{filename}")
 async def get_audio(filename: str):
@@ -231,6 +274,19 @@ def list_voices():
         "voices": voices,
         "default": "v2/en_speaker_6"
     }
+
+@app.post("/cancel/{task_id}")
+async def cancel_task(task_id: str):
+    """Cancel an active task"""
+    with tasks_lock:
+        task = active_tasks.get(task_id)
+        if task:
+            task["cancelled"] = True
+            logger.info(f"Bark TTS task {task_id} marked for cancellation")
+            return {"status": "cancelled", "task_id": task_id}
+        else:
+            logger.warning(f"Bark TTS task {task_id} not found (may have already completed)")
+            return {"status": "not_found", "task_id": task_id}
 
 if __name__ == "__main__":
     import uvicorn

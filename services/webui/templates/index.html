@@ -21,6 +21,8 @@
         .btn-primary:hover { background: #2980b9; }
         .btn-secondary { background: #95a5a6; color: white; }
         .btn-secondary:hover { background: #7f8c8d; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
         .voice-select { padding: 10px; border: 2px solid #e0e6ed; border-radius: 8px; font-size: 14px; }
         .response-section { margin-top: 30px; }
         .response-card { background: #f8f9fa; border-left: 4px solid #3498db; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
@@ -75,6 +77,9 @@
                 <div class="controls">
                     <button type="submit" class="btn btn-primary" id="askBtn">
                         Ask AI
+                    </button>
+                    <button type="button" class="btn btn-danger" id="cancelBtn" style="display: none;">
+                        Cancel
                     </button>
                     <button type="button" class="btn btn-secondary" id="clearBtn">
                         Clear
@@ -278,8 +283,18 @@
             document.getElementById('ttsModel').addEventListener('change', updateVoiceOptions);
         });
         
+        // Global abort controller for canceling requests
+        let currentAbortController = null;
+        
         document.getElementById('questionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // If there's an ongoing request, abort it first
+            if (currentAbortController) {
+                console.log('Cancelling previous request to start new one');
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
             
             const question = document.getElementById('questionInput').value;
             const generateAudio = document.getElementById('generateAudio').checked;
@@ -287,9 +302,19 @@
             const ttsModel = document.getElementById('ttsModel').value;
             const aiModel = document.getElementById('aiModel').value;
             
-            // Show loading
+            // Generate unique task ID for this request
+            const taskId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            console.log('Starting task with ID:', taskId);
+            
+            // Create new AbortController for this request
+            currentAbortController = new AbortController();
+            currentAbortController.taskId = taskId;  // Store task ID for cancellation
+            
+            // Show loading and cancel button, hide ask button
             document.getElementById('loadingSection').style.display = 'block';
             document.getElementById('responseSection').style.display = 'none';
+            document.getElementById('askBtn').style.display = 'none';
+            document.getElementById('cancelBtn').style.display = 'inline-block';
             
             try {
                 // Route to the selected AI service
@@ -302,8 +327,10 @@
                         question: question,
                         generate_audio: generateAudio,
                         voice: voice,
-                        tts_service: ttsModel  // Pass selected TTS service
-                    })
+                        tts_service: ttsModel,  // Pass selected TTS service
+                        task_id: taskId  // Pass task ID for cancellation tracking
+                    }),
+                    signal: currentAbortController.signal  // Add abort signal
                 });
 
                 
@@ -336,13 +363,59 @@
                 }
                 
             } catch (error) {
-                document.getElementById('responseSection').innerHTML = 
-                    `<div class="error">Error: ${error.message}</div>`;
+                if (error.name === 'AbortError') {
+                    // Request was cancelled
+                    document.getElementById('responseSection').innerHTML = 
+                        `<div class="error">
+                            Generation cancelled by user
+                            <br><small>Note: Backend processing may continue but results will not be displayed. You can submit a new question immediately.</small>
+                        </div>`;
+                } else {
+                    document.getElementById('responseSection').innerHTML = 
+                        `<div class="error">Error: ${error.message}</div>`;
+                }
                 document.getElementById('responseSection').style.display = 'block';
+            } finally {
+                // Hide loading and cancel button, show ask button
+                document.getElementById('loadingSection').style.display = 'none';
+                document.getElementById('askBtn').style.display = 'inline-block';
+                document.getElementById('cancelBtn').style.display = 'none';
+                
+                // Reset abort controller
+                currentAbortController = null;
+                
+                console.log('Request completed, form ready for next submission');
             }
-            
-            // Hide loading
-            document.getElementById('loadingSection').style.display = 'none';
+        });
+        
+        // Cancel button handler
+        document.getElementById('cancelBtn').addEventListener('click', async () => {
+            if (currentAbortController && currentAbortController.taskId) {
+                const taskId = currentAbortController.taskId;
+                console.log('Cancelling task:', taskId);
+                
+                // Abort the HTTP request
+                currentAbortController.abort();
+                
+                // Send cancellation signal to backend services
+                try {
+                    // Cancel on MultiMeditron/Meditron
+                    await fetch(`/api/multimeditron/cancel/${taskId}`, { method: 'POST' })
+                        .catch(err => console.log('Cancel on MultiMeditron:', err.message));
+                    
+                    // Cancel on Orpheus TTS
+                    await fetch(`/api/orpheus/cancel/${taskId}`, { method: 'POST' })
+                        .catch(err => console.log('Cancel on Orpheus:', err.message));
+                    
+                    // Cancel on Bark TTS
+                    await fetch(`/api/bark/cancel/${taskId}`, { method: 'POST' })
+                        .catch(err => console.log('Cancel on Bark:', err.message));
+                    
+                    console.log('Backend cancellation requests sent');
+                } catch (error) {
+                    console.error('Error sending cancellation:', error);
+                }
+            }
         });
 
         // Clear button
@@ -380,6 +453,30 @@
             
             audioPlayer.addEventListener('play', function() {
                 playButton.textContent = 'Pause';
+            });
+            
+            // Add error handler for debugging
+            audioPlayer.addEventListener('error', function(e) {
+                console.error('Audio player error:', e);
+                console.error('Error code:', audioPlayer.error ? audioPlayer.error.code : 'unknown');
+                console.error('Error message:', audioPlayer.error ? audioPlayer.error.message : 'unknown');
+                console.error('Current src:', audioPlayer.src);
+                
+                // Try to provide helpful error message
+                if (audioPlayer.error) {
+                    const errorMessages = {
+                        1: 'MEDIA_ERR_ABORTED: Audio loading was aborted',
+                        2: 'MEDIA_ERR_NETWORK: Network error while loading audio',
+                        3: 'MEDIA_ERR_DECODE: Audio decoding failed',
+                        4: 'MEDIA_ERR_SRC_NOT_SUPPORTED: Audio format not supported'
+                    };
+                    console.error('Detailed error:', errorMessages[audioPlayer.error.code] || 'Unknown error');
+                }
+            });
+            
+            // Add loadeddata event to confirm successful load
+            audioPlayer.addEventListener('loadeddata', function() {
+                console.log('Audio loaded successfully:', audioPlayer.src);
             });
         });
 

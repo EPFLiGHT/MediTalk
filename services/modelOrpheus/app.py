@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Optional
 from infer import OrpheusTTS
 import os
 import logging
+import threading
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -14,10 +16,15 @@ app = FastAPI(title="Orpheus TTS Service", version="1.0.0")
 # Global TTS instance
 tts = None
 
+# Task tracking for cancellation
+active_tasks = {}  # task_id -> {"cancelled": bool}
+tasks_lock = threading.Lock()
+
 class TTSRequest(BaseModel):
     text: str
     voice: str = "tara"
     output_filename: str = None
+    task_id: Optional[str] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -74,14 +81,33 @@ def get_voices():
         "default": "tara"
     }
 
+def is_task_cancelled(task_id: str) -> bool:
+    """Check if a task has been cancelled"""
+    with tasks_lock:
+        task = active_tasks.get(task_id)
+        return task["cancelled"] if task else False
+
 @app.post("/synthesize")
 def synthesize(request: TTSRequest):
+    task_id = request.task_id
+    
+    # Register task if task_id provided
+    if task_id:
+        with tasks_lock:
+            active_tasks[task_id] = {"cancelled": False}
+        logger.info(f"Orpheus TTS task {task_id} started")
+    
     try:
         if tts is None:
             raise HTTPException(
                 status_code=503, 
                 detail="TTS model not loaded. Please check HUGGINGFACE_TOKEN and model access permissions."
             )
+        
+        # Check cancellation before starting
+        if task_id and is_task_cancelled(task_id):
+            logger.info(f"Orpheus TTS task {task_id} cancelled before synthesis")
+            raise HTTPException(status_code=499, detail="Task cancelled by user")
         
         output_filename = request.output_filename or f"orpheus_output_{hash(request.text) % 10000}.wav"
         
@@ -97,7 +123,12 @@ def synthesize(request: TTSRequest):
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, output_filename)
         
-        output_file = tts.synthesize(request.text, voice=request.voice, output_path=output_path)
+        output_file = tts.synthesize(request.text, voice=request.voice, output_path=output_path, task_id=task_id)
+        
+        # Check cancellation after synthesis
+        if task_id and is_task_cancelled(task_id):
+            logger.info(f"Orpheus TTS task {task_id} cancelled after synthesis")
+            raise HTTPException(status_code=499, detail="Task cancelled by user")
         
         return {
             "message": "Audio generated successfully",
@@ -107,6 +138,8 @@ def synthesize(request: TTSRequest):
             "text": request.text,
             "voice": request.voice
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during synthesis: {e}")
         if "401" in str(e) or "gated" in str(e).lower():
@@ -115,6 +148,12 @@ def synthesize(request: TTSRequest):
                 detail="Authentication failed. Please ensure HUGGINGFACE_TOKEN is valid and you have access to the model."
             )
         raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")
+    finally:
+        # Clean up task
+        if task_id:
+            with tasks_lock:
+                active_tasks.pop(task_id, None)
+            logger.info(f"Orpheus TTS task {task_id} cleaned up")
 
 @app.get("/synthesize")
 def synthesize_get(text: str, voice: str = "tara"):
@@ -141,3 +180,16 @@ def get_audio_file(filename: str):
         )
     else:
         raise HTTPException(status_code=404, detail="Audio file not found")
+
+@app.post("/cancel/{task_id}")
+async def cancel_task(task_id: str):
+    """Cancel an active task"""
+    with tasks_lock:
+        task = active_tasks.get(task_id)
+        if task:
+            task["cancelled"] = True
+            logger.info(f"Orpheus TTS task {task_id} marked for cancellation")
+            return {"status": "cancelled", "task_id": task_id}
+        else:
+            logger.warning(f"Orpheus TTS task {task_id} not found (may have already completed)")
+            return {"status": "not_found", "task_id": task_id}

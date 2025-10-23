@@ -80,12 +80,20 @@ class OrpheusTTS:
                     logger.info(f"Trying next model...")
                     continue
 
-    def synthesize(self, text, voice="tara", output_path="output.wav"):
+    def synthesize(self, text, voice="tara", output_path="output.wav", task_id=None):
         """Generate TTS audio from text and save to output_path."""
         try:
+            # Import cancellation checker from app module if task_id is provided
+            if task_id:
+                from app import is_task_cancelled
+            
             # Clear GPU cache before synthesis to free fragmented memory
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            
+            # Check cancellation before starting
+            if task_id and is_task_cancelled(task_id):
+                raise Exception("Task cancelled by user")
             
             # Split text into sentence-aware chunks to avoid sentence mixing
             logger.info(f"Synthesizing text (length={len(text)} chars) with voice '{voice}'")
@@ -98,6 +106,10 @@ class OrpheusTTS:
             end_tokens = torch.tensor([[128009, 128260]], dtype=torch.int64)
             
             for i, chunk in enumerate(chunks):
+                # Check cancellation before each chunk
+                if task_id and is_task_cancelled(task_id):
+                    logger.info(f"Task {task_id} cancelled during chunk {i+1}/{len(chunks)}")
+                    raise Exception("Task cancelled by user")
                 logger.info(f"Synthesizing chunk {i+1}/{len(chunks)} (len={len(chunk)} chars)")
                 prompt = f"{voice}: {chunk}"
 
