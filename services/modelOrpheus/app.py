@@ -57,6 +57,23 @@ def health_check():
         }
     return {"status": "healthy", "model": "orpheus"}
 
+@app.get("/voices")
+def get_voices():
+    """Return list of available Orpheus voices"""
+    return {
+        "voices": [
+            {"id": "tara", "name": "Tara", "gender": "female"},
+            {"id": "leah", "name": "Leah", "gender": "female"},
+            {"id": "jess", "name": "Jess", "gender": "female"},
+            {"id": "mia", "name": "Mia", "gender": "female"},
+            {"id": "zoe", "name": "Zoe", "gender": "female"},
+            {"id": "leo", "name": "Leo", "gender": "male"},
+            {"id": "dan", "name": "Dan", "gender": "male"},
+            {"id": "zac", "name": "Zac", "gender": "male"}
+        ],
+        "default": "tara"
+    }
+
 @app.post("/synthesize")
 def synthesize(request: TTSRequest):
     try:

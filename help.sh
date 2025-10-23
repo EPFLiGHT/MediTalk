@@ -15,3 +15,6 @@ tail -f logs/modelOrpheus.log
 
 # Whisper ASR logs
 tail -f logs/modelWhisper.log
+
+# Monitor Memory Usage
+nvidia-smi --query-gpu=memory.used,memory.free,memory.total --format=csv

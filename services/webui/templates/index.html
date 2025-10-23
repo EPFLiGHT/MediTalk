@@ -181,11 +181,29 @@
         // Handle form submission
         // TTS Model and Voice Management
         const ttsVoices = {
-            orpheus: [
-                { value: 'tara', label: 'Tara (Default)' }
-            ],
+            orpheus: [],  // Will be populated from API
             bark: []  // Will be populated from API
         };
+        
+        // Load Orpheus voices from API
+        async function loadOrpheusVoices() {
+            try {
+                const response = await fetch('/api/orpheus/voices');
+                const data = await response.json();
+                if (data.voices) {
+                    ttsVoices.orpheus = data.voices.map(voice => ({
+                        value: voice.id,
+                        label: `${voice.name} (${voice.gender})`
+                    }));
+                }
+            } catch (error) {
+                console.error('Failed to load Orpheus voices:', error);
+                // Fallback to default voice
+                ttsVoices.orpheus = [
+                    { value: 'tara', label: 'Tara (female)' }
+                ];
+            }
+        }
         
         // Load Bark voices from API
         async function loadBarkVoices() {
@@ -253,7 +271,7 @@
         
         // Initialize voices on page load
         document.addEventListener('DOMContentLoaded', async function() {
-            await loadBarkVoices();
+            await Promise.all([loadOrpheusVoices(), loadBarkVoices()]);
             updateVoiceOptions();
             
             // Listen for TTS model changes
