@@ -5,6 +5,7 @@ from meditron import MeditronLLM
 import requests
 import logging
 import os
+import re
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,33 @@ BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
 
 # Global model instance
 meditron = None
+
+def clean_text_for_tts(text: str) -> str:
+    """
+    Remove markdown formatting from text before sending to TTS.
+    This prevents TTS from reading "asterisk" or other markup symbols.
+    """
+    # Remove bold/italic markers: **text**, __text__, *text*, _text_
+    text = re.sub(r'\*\*([^\*]+)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'__([^_]+)__', r'\1', text)        # __bold__
+    text = re.sub(r'\*([^\*]+)\*', r'\1', text)       # *italic*
+    text = re.sub(r'_([^_]+)_', r'\1', text)          # _italic_
+    
+    # Remove markdown headers: # Header, ## Header, etc.
+    text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
+    
+    # Remove markdown list markers: - item, * item, 1. item
+    text = re.sub(r'^\s*[-\*]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    
+    # Remove inline code markers: `code`
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    
+    # Remove links: [text](url) -> text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    
+    return text.strip()
+
 
 class QuestionRequest(BaseModel):
     question: str
@@ -100,11 +128,15 @@ def ask_medical_question(request: QuestionRequest):
                 tts_url = BARK_URL if request.tts_service == "bark" else ORPHEUS_URL
                 tts_name = request.tts_service.capitalize()
                 
+                # Clean markdown formatting from text before TTS
+                clean_answer = clean_text_for_tts(answer)
                 logger.info(f"Generating audio response using {tts_name}...")
+                logger.info(f"Cleaned {len(answer) - len(clean_answer)} characters of markdown formatting for TTS")
+                
                 tts_response = requests.post(
                     f"{tts_url}/synthesize",
                     json={
-                        "text": answer,
+                        "text": clean_answer,
                         "voice": request.voice
                     },
                     timeout=600  # Increased to 10 minutes for complex audio generation

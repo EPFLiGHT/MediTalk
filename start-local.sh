@@ -27,6 +27,19 @@ set -a  # Auto-export all variables
 source .env
 set +a  # Stop auto-exporting
 
+# Check if ffmpeg is available (required by Whisper)
+if ! command -v ffmpeg &> /dev/null; then
+    echo "ERROR: ffmpeg is not installed!"
+    echo "ffmpeg is required by Whisper for audio transcription."
+    echo ""
+    echo "Please install ffmpeg:"
+    echo "  - Ubuntu/Debian: sudo apt install ffmpeg"
+    echo "  - macOS: brew install ffmpeg"
+    echo "  - Or run: ./setup-local.sh"
+    echo ""
+    exit 1
+fi
+
 # Ensure critical variables are set with defaults
 export HUGGINGFACE_TOKEN
 export MEDITRON_MODEL=${MEDITRON_MODEL:-"epfl-llm/meditron-7b"}

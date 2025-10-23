@@ -224,6 +224,33 @@
             });
         }
         
+        // Simple markdown renderer for medical AI responses
+        function renderMarkdown(text) {
+            // Convert markdown to HTML
+            let html = text;
+            
+            // Bold: **text** or __text__
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+            
+            // Italic: *text* or _text_ (but not URLs or already processed)
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+            
+            // Headers: # Header, ## Header, etc.
+            html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+            html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+            
+            // Inline code: `code`
+            html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+            
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+            
+            return html;
+        }
+        
         // Initialize voices on page load
         document.addEventListener('DOMContentLoaded', async function() {
             await loadBarkVoices();
@@ -266,8 +293,8 @@
                 
                 const data = await response.json();
                 
-                // Display response
-                document.getElementById('responseText').innerHTML = data.answer.replace(/\n/g, '<br>');
+                // Display response with markdown rendering
+                document.getElementById('responseText').innerHTML = renderMarkdown(data.answer);
                 document.getElementById('responseSection').style.display = 'block';
                 
                 // Handle audio if generated
