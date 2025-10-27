@@ -28,16 +28,38 @@ source .env
 set +a  # Stop auto-exporting
 
 # Check if ffmpeg is available (required by Whisper)
+# Check and install ffmpeg (required for Whisper audio processing)
+echo ""
+echo "Checking system dependencies..."
 if ! command -v ffmpeg &> /dev/null; then
-    echo "ERROR: ffmpeg is not installed!"
-    echo "ffmpeg is required by Whisper for audio transcription."
-    echo ""
-    echo "Please install ffmpeg:"
-    echo "  - Ubuntu/Debian: sudo apt install ffmpeg"
-    echo "  - macOS: brew install ffmpeg"
-    echo "  - Or run: ./setup-local.sh"
-    echo ""
-    exit 1
+    echo "⚠ ffmpeg not found - required for Whisper audio transcription"
+    echo "Installing ffmpeg..."
+    
+    if command -v apt &> /dev/null; then
+        sudo apt update && sudo apt install -y ffmpeg
+    elif command -v apt-get &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y ffmpeg
+    elif command -v yum &> /dev/null; then
+        sudo yum install -y ffmpeg
+    elif command -v brew &> /dev/null; then
+        brew install ffmpeg
+    else
+        echo "ERROR: Could not install ffmpeg automatically."
+        echo "Please install ffmpeg manually:"
+        echo "  Ubuntu/Debian: sudo apt install ffmpeg"
+        echo "  CentOS/RHEL: sudo yum install ffmpeg"
+        echo "  macOS: brew install ffmpeg"
+        exit 1
+    fi
+    
+    if command -v ffmpeg &> /dev/null; then
+        echo "✓ ffmpeg installed successfully"
+    else
+        echo "ERROR: ffmpeg installation failed"
+        exit 1
+    fi
+else
+    echo "✓ ffmpeg is installed ($(ffmpeg -version | head -n1))"
 fi
 
 # Ensure critical variables are set with defaults
@@ -84,6 +106,33 @@ start_service() {
     echo "  ✓ $service started (PID: $(cat $pid_file))"
 }
 
+# Function to start Streamlit service
+start_streamlit() {
+    local service=$1
+    local port=$2
+    local service_dir="services/$service"
+    local venv_dir="$service_dir/venv"
+    local pid_file=".pids/$service-streamlit.pid"
+    
+    echo "Starting $service Streamlit on port $port..."
+    
+    # Check if virtual environment exists
+    if [ ! -d "$venv_dir" ]; then
+        echo "ERROR: Virtual environment not found for $service"
+        echo "Please run ./setup-local.sh first"
+        exit 1
+    fi
+    
+    # Start Streamlit in background
+    cd "$service_dir"
+    source venv/bin/activate
+    nohup python -m streamlit run streamlit_app.py --server.port $port --server.address 0.0.0.0 --server.headless true > "../../logs/$service-streamlit.log" 2>&1 &
+    echo $! > "../../$pid_file"
+    cd ../..
+    
+    echo "  ✓ $service Streamlit started (PID: $(cat $pid_file))"
+}
+
 # Create logs directory
 mkdir -p logs
 
@@ -113,15 +162,19 @@ start_service "modelMultiMeditron" 5009
 # Give AI models time to load
 sleep 5
 
-# 6. Start WebUI (depends on all services)
+# 6. Start WebUI API (depends on all services)
 start_service "webui" 8080
+
+# 7. Start Streamlit UI
+start_streamlit "webui" 8501
 
 echo ""
 echo "=========================================="
 echo "All services started! "
 echo ""
 echo "Service URLs:"
-echo "  - Web Interface: http://localhost:8080"
+echo "  - Streamlit Web Interface: http://localhost:8501"
+echo "  - FastAPI Web Interface: http://localhost:8080"
 echo "  - Meditron AI (text-only): http://localhost:5006"
 echo "  - MultiMeditron AI (multimodal): http://localhost:5009"
 echo "  - Orpheus TTS: http://localhost:5005"
@@ -145,5 +198,5 @@ echo ""
 echo "Waiting for services to be ready..."
 sleep 5
 echo ""
-echo "Opening web interface..."
-open http://localhost:8080 2>/dev/null || xdg-open http://localhost:8080 2>/dev/null || echo "Please open http://localhost:8080 in your browser"
+echo "Opening Streamlit web interface..."
+open http://localhost:8501 2>/dev/null || xdg-open http://localhost:8501 2>/dev/null || echo "Please open http://localhost:8501 in your browser"
