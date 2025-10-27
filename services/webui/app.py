@@ -177,6 +177,38 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
         logger.error(f"Error transcribing audio: {e}")
         return {"error": str(e)}
 
+@app.get("/whisper-debug/{filename}")
+async def get_whisper_debug_audio(filename: str):
+    """Proxy debug audio files from Whisper service"""
+    logger.info(f"Fetching Whisper debug audio: {filename}")
+    try:
+        response = requests.get(
+            f"{WHISPER_URL}/debug-audio/{filename}",
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            return Response(
+                content=response.content,
+                media_type="audio/wav",
+                headers={"Content-Disposition": f"inline; filename={filename}"}
+            )
+        else:
+            return {"error": "Audio file not found"}
+    except Exception as e:
+        logger.error(f"Error fetching debug audio: {e}")
+        return {"error": str(e)}
+
+@app.get("/api/whisper/debug-audio")
+async def list_whisper_debug_audio():
+    """List all available Whisper debug audio files"""
+    try:
+        response = requests.get(f"{WHISPER_URL}/debug-audio", timeout=10)
+        return response.json()
+    except Exception as e:
+        logger.error(f"Error listing debug audio: {e}")
+        return {"error": str(e)}
+
 @app.api_route("/audio/{filename}", methods=["GET", "HEAD"])
 async def proxy_audio(request: Request, filename: str, range: Optional[str] = Header(None)):
     """Proxy audio files from TTS services (Orpheus or Bark) for direct playback with range support"""

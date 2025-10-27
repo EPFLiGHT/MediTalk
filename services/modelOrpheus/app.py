@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from infer import OrpheusTTS
@@ -99,36 +99,13 @@ def synthesize(request: TTSRequest):
         
         return JSONResponse(content={
             "status": "success",
+            "filename": output_filename,
             "audio_file": output_path,
             "message": "Audio generated successfully"
         })
     except Exception as e:
         logger.error(f"Error in Orpheus TTS synthesis: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error during synthesis: {e}")
-        if "401" in str(e) or "gated" in str(e).lower():
-            raise HTTPException(
-                status_code=401, 
-                detail="Authentication failed. Please ensure HUGGINGFACE_TOKEN is valid and you have access to the model."
-            )
-        raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")
-    finally:
-        # DON'T clean up task immediately - keep it for a few seconds to allow in-flight cancel requests
-        # The task will be cleaned up by a background task or timeout
-        if task_id:
-            # Schedule cleanup after a delay to allow cancel requests to arrive
-            async def delayed_cleanup():
-                await asyncio.sleep(5)  # Wait 5 seconds before cleaning up
-                with tasks_lock:
-                    active_tasks.pop(task_id, None)
-                logger.info(f"Orpheus TTS task {task_id} cleaned up (delayed)")
-            
-            # Create task for delayed cleanup (fire and forget)
-            asyncio.create_task(delayed_cleanup())
-            logger.info(f"Orpheus TTS task {task_id} scheduled for cleanup in 5 seconds")
 
 @app.get("/synthesize")
 def synthesize_get(text: str, voice: str = "tara"):
@@ -155,23 +132,3 @@ def get_audio_file(filename: str):
         )
     else:
         raise HTTPException(status_code=404, detail="Audio file not found")
-
-@app.post("/cancel/{task_id}")
-async def cancel_task(task_id: str):
-    """Cancel an active task"""
-    logger.info(f"CANCEL REQUEST RECEIVED for task {task_id}")
-    with tasks_lock:
-        logger.info(f"Active tasks BEFORE cancel: {active_tasks}")
-        task = active_tasks.get(task_id)
-        if task:
-            logger.info(f"Task {task_id} found, BEFORE setting cancelled: {task}")
-            task["cancelled"] = True
-            # Verify it was actually set
-            logger.info(f"Task {task_id} AFTER setting cancelled: {task}")
-            logger.info(f"Active tasks AFTER cancel: {active_tasks}")
-            logger.info(f"Orpheus TTS task {task_id} MARKED FOR CANCELLATION - cancelled={task['cancelled']}")
-            return {"status": "cancelled", "task_id": task_id}
-        else:
-            logger.warning(f"Orpheus TTS task {task_id} NOT FOUND in active tasks")
-            logger.warning(f"Available task IDs: {list(active_tasks.keys())}")
-            return {"status": "not_found", "task_id": task_id}

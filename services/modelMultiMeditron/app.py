@@ -55,6 +55,10 @@ def clean_text_for_tts(text: str) -> str:
     
     return text.strip()
 
+class ConversationMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
 class QuestionRequest(BaseModel):
     question: str
     max_length: int = 512
@@ -62,6 +66,7 @@ class QuestionRequest(BaseModel):
     generate_audio: bool = True
     voice: str = "tara"
     tts_service: str = "orpheus"  # "orpheus" or "bark"
+    conversation_history: List[ConversationMessage] = []  # For maintaining conversation context
 
 class MedicalResponse(BaseModel):
     question: str
@@ -181,7 +186,8 @@ async def ask_question(request: QuestionRequest):
             question=request.question,
             modalities=[],  # No images for text-only
             temperature=request.temperature,
-            max_length=request.max_length
+            max_length=request.max_length,
+            conversation_history=request.conversation_history
         )
         
         response_data = {
@@ -213,7 +219,8 @@ def generate_multimeditron_response(
     question: str, 
     modalities: List[Dict], 
     temperature: float = 0.7,
-    max_length: int = 512
+    max_length: int = 512,
+    conversation_history: List[ConversationMessage] = []
 ) -> str:
     """
     Generate response using MultiMeditron model
@@ -221,11 +228,21 @@ def generate_multimeditron_response(
     """
     global model, tokenizer, collator, attachment_token_idx
     
-    # Build the sample following README format
-    conversations = [{
+    # Build the conversations list with history + current question
+    conversations = []
+    
+    # Add conversation history
+    for msg in conversation_history:
+        conversations.append({
+            "role": msg.role,
+            "content": msg.content
+        })
+    
+    # Add current user question
+    conversations.append({
         "role": "user",
         "content": question
-    }]
+    })
     
     sample = {
         "conversations": conversations,
@@ -233,6 +250,7 @@ def generate_multimeditron_response(
     }
     
     logger.info(f"Generating response for question: {question[:100]}")
+    logger.info(f"With conversation history of {len(conversation_history)} messages")
     logger.info(f"With {len(modalities)} modalities")
     
     # Create batch using collator (following README)
