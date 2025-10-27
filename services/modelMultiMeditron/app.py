@@ -10,18 +10,12 @@ from transformers import AutoTokenizer
 from PIL import Image
 import io
 import tempfile
-import uuid
-import threading
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MultiMeditron Multimodal Medical AI Service", version="1.0.0")
-
-# Task tracking for cancellation
-active_tasks = {}  # task_id -> {"cancelled": bool, "lock": threading.Lock}
-tasks_lock = threading.Lock()
 
 # Service URLs
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
@@ -68,7 +62,6 @@ class QuestionRequest(BaseModel):
     generate_audio: bool = True
     voice: str = "tara"
     tts_service: str = "orpheus"  # "orpheus" or "bark"
-    task_id: Optional[str] = None  # For task tracking and cancellation
 
 class MedicalResponse(BaseModel):
     question: str
@@ -169,33 +162,11 @@ def health_check():
         "attachment_token": ATTACHMENT_TOKEN
     }
 
-@app.post("/cancel/{task_id}")
-async def cancel_task(task_id: str):
-    """Cancel an active task"""
-    with tasks_lock:
-        task = active_tasks.get(task_id)
-        if task:
-            task["cancelled"] = True
-            logger.info(f"Task {task_id} marked for cancellation")
-            return {"status": "cancelled", "task_id": task_id}
-        else:
-            logger.warning(f"Task {task_id} not found (may have already completed)")
-            return {"status": "not_found", "task_id": task_id}
-
 @app.post("/ask", response_model=MedicalResponse)
 async def ask_question(request: QuestionRequest):
     """
     Text-only medical question endpoint (compatible with existing Meditron API)
     """
-    # Generate task ID if not provided
-    task_id = request.task_id or str(uuid.uuid4())
-    
-    # Register task
-    with tasks_lock:
-        active_tasks[task_id] = {"cancelled": False, "lock": threading.Lock()}
-    
-    logger.info(f"Starting task {task_id}: {request.question[:100]}...")
-    
     try:
         if not model or not tokenizer or not collator:
             # Fallback mode
@@ -203,26 +174,15 @@ async def ask_question(request: QuestionRequest):
             answer = generate_fallback_response(request.question)
             return MedicalResponse(question=request.question, answer=answer)
         
-        # Check cancellation before starting
-        if is_task_cancelled(task_id):
-            logger.info(f"Task {task_id} was cancelled before text generation")
-            raise HTTPException(status_code=499, detail="Task cancelled by user")
-        
-        logger.info(f"Task {task_id}: Generating text response...")
+        logger.info("Generating text response...")
         
         # Generate answer using MultiMeditron (text-only, no modalities)
         answer = generate_multimeditron_response(
             question=request.question,
             modalities=[],  # No images for text-only
             temperature=request.temperature,
-            max_length=request.max_length,
-            task_id=task_id
+            max_length=request.max_length
         )
-        
-        # Check cancellation after text generation
-        if is_task_cancelled(task_id):
-            logger.info(f"Task {task_id} was cancelled after text generation")
-            raise HTTPException(status_code=499, detail="Task cancelled by user")
         
         response_data = {
             "question": request.question,
@@ -232,44 +192,28 @@ async def ask_question(request: QuestionRequest):
         # Generate audio if requested
         if request.generate_audio:
             try:
-                logger.info(f"Task {task_id}: Generating audio with {request.tts_service}...")
-                audio_result = generate_audio(answer, request.voice, request.tts_service, task_id)
+                logger.info(f"Generating audio with {request.tts_service}...")
+                audio_result = generate_audio(answer, request.voice, request.tts_service)
                 if audio_result:
                     response_data["audio_file"] = audio_result.get("filename")
                     response_data["audio_url"] = audio_result.get("url")
             except Exception as e:
-                if "Task cancelled" in str(e):
-                    raise
                 logger.warning(f"Failed to generate audio: {e}")
         
-        logger.info(f"Task {task_id} completed successfully")
+        logger.info("Request completed successfully")
         return MedicalResponse(**response_data)
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error processing question (task {task_id}): {e}")
+        logger.error(f"Error processing question: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Clean up task from active tasks
-        with tasks_lock:
-            active_tasks.pop(task_id, None)
-        logger.info(f"Task {task_id} cleaned up")
-
-def is_task_cancelled(task_id: str) -> bool:
-    """Check if a task has been cancelled"""
-    with tasks_lock:
-        task = active_tasks.get(task_id)
-        return task["cancelled"] if task else False
 
 def generate_multimeditron_response(
     question: str, 
     modalities: List[Dict], 
     temperature: float = 0.7,
-    max_length: int = 512,
-    task_id: Optional[str] = None
+    max_length: int = 512
 ) -> str:
     """
     Generate response using MultiMeditron model
@@ -291,24 +235,12 @@ def generate_multimeditron_response(
     logger.info(f"Generating response for question: {question[:100]}")
     logger.info(f"With {len(modalities)} modalities")
     
-    # Check cancellation before expensive operations
-    if task_id and is_task_cancelled(task_id):
-        raise Exception("Task cancelled by user")
-    
     # Create batch using collator (following README)
     batch = collator([sample])
-    
-    # Check cancellation before generation
-    if task_id and is_task_cancelled(task_id):
-        raise Exception("Task cancelled by user")
     
     # Generate using model (following README)
     with torch.no_grad():
         outputs = model.generate(batch=batch, temperature=temperature)
-    
-    # Check cancellation after generation
-    if task_id and is_task_cancelled(task_id):
-        raise Exception("Task cancelled by user")
     
     # Decode output (following README)
     response_text = tokenizer.batch_decode(
@@ -332,15 +264,11 @@ def generate_fallback_response(question: str) -> str:
         f"Once the full model is loaded, you'll get real medical AI responses with multimodal support."
     )
 
-def generate_audio(text: str, voice: str, tts_service: str = "orpheus", task_id: Optional[str] = None) -> Optional[Dict]:
+def generate_audio(text: str, voice: str, tts_service: str = "orpheus") -> Optional[Dict]:
     """
     Generate audio using specified TTS service (Orpheus or Bark)
     """
     try:
-        # Check cancellation before starting
-        if task_id and is_task_cancelled(task_id):
-            raise Exception("Task cancelled by user")
-        
         # Clean markdown formatting from text before TTS
         clean_text = clean_text_for_tts(text)
         logger.info(f"Cleaned {len(text) - len(clean_text)} characters of markdown formatting for TTS")
@@ -350,20 +278,13 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", task_id:
         tts_name = tts_service.capitalize()
         logger.info(f"Generating audio with {tts_name} TTS...")
         
-        # Pass task_id to TTS service for cancellation support
         payload = {"text": clean_text, "voice": voice}
-        if task_id:
-            payload["task_id"] = task_id
         
         response = requests.post(
             f"{tts_url}/synthesize",
             json=payload,
             timeout=600  # Increased to 10 minutes for long text generation
         )
-        
-        # Check cancellation after TTS call
-        if task_id and is_task_cancelled(task_id):
-            raise Exception("Task cancelled by user")
         
         if response.status_code == 200:
             result = response.json()
@@ -374,6 +295,10 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", task_id:
                 "filename": filename,
                 "url": f"http://localhost:8080/audio/{filename}"
             }
+        elif response.status_code == 499:
+            # TTS service was cancelled
+            logger.info(f"TTS generation was cancelled on {tts_name} service")
+            raise Exception("Task cancelled by user")
         else:
             logger.warning(f"Audio generation failed with {tts_name}: {response.status_code}")
             return None

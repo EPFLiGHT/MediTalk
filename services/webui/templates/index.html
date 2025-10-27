@@ -78,9 +78,6 @@
                     <button type="submit" class="btn btn-primary" id="askBtn">
                         Ask AI
                     </button>
-                    <button type="button" class="btn btn-danger" id="cancelBtn" style="display: none;">
-                        Cancel
-                    </button>
                     <button type="button" class="btn btn-secondary" id="clearBtn">
                         Clear
                     </button>
@@ -283,39 +280,21 @@
             document.getElementById('ttsModel').addEventListener('change', updateVoiceOptions);
         });
         
-        // Global abort controller for canceling requests
-        let currentAbortController = null;
         
         document.getElementById('questionForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            // If there's an ongoing request, abort it first
-            if (currentAbortController) {
-                console.log('Cancelling previous request to start new one');
-                currentAbortController.abort();
-                currentAbortController = null;
-            }
-            
+
             const question = document.getElementById('questionInput').value;
             const generateAudio = document.getElementById('generateAudio').checked;
             const voice = document.getElementById('voiceSelect').value;
             const ttsModel = document.getElementById('ttsModel').value;
             const aiModel = document.getElementById('aiModel').value;
             
-            // Generate unique task ID for this request
-            const taskId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            console.log('Starting task with ID:', taskId);
-            
-            // Create new AbortController for this request
-            currentAbortController = new AbortController();
-            currentAbortController.taskId = taskId;  // Store task ID for cancellation
-            
-            // Show loading and cancel button, hide ask button
+            // Show loading, hide ask button
             document.getElementById('loadingSection').style.display = 'block';
             document.getElementById('responseSection').style.display = 'none';
             document.getElementById('askBtn').style.display = 'none';
-            document.getElementById('cancelBtn').style.display = 'inline-block';
-            
+
             try {
                 // Route to the selected AI service
                 const aiEndpoint = aiModel === 'multimeditron' ? '/api/multimeditron/ask' : '/api/meditron/ask';
@@ -327,10 +306,8 @@
                         question: question,
                         generate_audio: generateAudio,
                         voice: voice,
-                        tts_service: ttsModel,  // Pass selected TTS service
-                        task_id: taskId  // Pass task ID for cancellation tracking
+                        tts_service: ttsModel  // Pass selected TTS service
                     }),
-                    signal: currentAbortController.signal  // Add abort signal
                 });
 
                 
@@ -363,58 +340,15 @@
                 }
                 
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    // Request was cancelled
-                    document.getElementById('responseSection').innerHTML = 
-                        `<div class="error">
-                            Generation cancelled by user
-                            <br><small>Note: Backend processing may continue but results will not be displayed. You can submit a new question immediately.</small>
-                        </div>`;
-                } else {
-                    document.getElementById('responseSection').innerHTML = 
-                        `<div class="error">Error: ${error.message}</div>`;
-                }
+                document.getElementById('responseSection').innerHTML = 
+                    `<div class="error">Error: ${error.message}</div>`;
                 document.getElementById('responseSection').style.display = 'block';
             } finally {
-                // Hide loading and cancel button, show ask button
+                // Hide loading, show ask button
                 document.getElementById('loadingSection').style.display = 'none';
                 document.getElementById('askBtn').style.display = 'inline-block';
-                document.getElementById('cancelBtn').style.display = 'none';
-                
-                // Reset abort controller
-                currentAbortController = null;
                 
                 console.log('Request completed, form ready for next submission');
-            }
-        });
-        
-        // Cancel button handler
-        document.getElementById('cancelBtn').addEventListener('click', async () => {
-            if (currentAbortController && currentAbortController.taskId) {
-                const taskId = currentAbortController.taskId;
-                console.log('Cancelling task:', taskId);
-                
-                // Abort the HTTP request
-                currentAbortController.abort();
-                
-                // Send cancellation signal to backend services
-                try {
-                    // Cancel on MultiMeditron/Meditron
-                    await fetch(`/api/multimeditron/cancel/${taskId}`, { method: 'POST' })
-                        .catch(err => console.log('Cancel on MultiMeditron:', err.message));
-                    
-                    // Cancel on Orpheus TTS
-                    await fetch(`/api/orpheus/cancel/${taskId}`, { method: 'POST' })
-                        .catch(err => console.log('Cancel on Orpheus:', err.message));
-                    
-                    // Cancel on Bark TTS
-                    await fetch(`/api/bark/cancel/${taskId}`, { method: 'POST' })
-                        .catch(err => console.log('Cancel on Bark:', err.message));
-                    
-                    console.log('Backend cancellation requests sent');
-                } catch (error) {
-                    console.error('Error sending cancellation:', error);
-                }
             }
         });
 

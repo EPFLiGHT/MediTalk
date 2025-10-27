@@ -80,24 +80,23 @@ class OrpheusTTS:
                     logger.info(f"Trying next model...")
                     continue
 
-    def synthesize(self, text, voice="tara", output_path="output.wav", task_id=None):
-        """Generate TTS audio from text and save to output_path."""
+    def synthesize(self, text, voice="tara", output_path="output.wav"):
+        """
+        Generate TTS audio from text and save to output_path.
+        
+        Args:
+            text: Text to synthesize
+            voice: Voice to use
+            output_path: Path to save audio file
+        """
         try:
-            # Import cancellation checker from app module if task_id is provided
-            if task_id:
-                from app import is_task_cancelled
-            
             # Clear GPU cache before synthesis to free fragmented memory
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             
-            # Check cancellation before starting
-            if task_id and is_task_cancelled(task_id):
-                raise Exception("Task cancelled by user")
-            
-            # Split text into sentence-aware chunks to avoid sentence mixing
+            # Split text into chunks for better quality
             logger.info(f"Synthesizing text (length={len(text)} chars) with voice '{voice}'")
-            chunks = self._chunk_text(text, max_chars=400)
+            chunks = self._chunk_text(text, max_chars=250)
             logger.info(f"Text split into {len(chunks)} chunks")
 
             # Synthesize each chunk sequentially and collect audio arrays
@@ -106,10 +105,6 @@ class OrpheusTTS:
             end_tokens = torch.tensor([[128009, 128260]], dtype=torch.int64)
             
             for i, chunk in enumerate(chunks):
-                # Check cancellation before each chunk
-                if task_id and is_task_cancelled(task_id):
-                    logger.info(f"Task {task_id} cancelled during chunk {i+1}/{len(chunks)}")
-                    raise Exception("Task cancelled by user")
                 logger.info(f"Synthesizing chunk {i+1}/{len(chunks)} (len={len(chunk)} chars)")
                 prompt = f"{voice}: {chunk}"
 
@@ -124,7 +119,7 @@ class OrpheusTTS:
                     generated = self.model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=10000,  # Increased from 1200 to support longer audio (TODO: tune this value)
+                        max_new_tokens=10000,
                         do_sample=True,
                         temperature=0.6,
                         top_p=0.95,

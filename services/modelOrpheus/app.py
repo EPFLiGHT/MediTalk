@@ -5,7 +5,6 @@ from typing import Optional
 from infer import OrpheusTTS
 import os
 import logging
-import threading
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -16,15 +15,10 @@ app = FastAPI(title="Orpheus TTS Service", version="1.0.0")
 # Global TTS instance
 tts = None
 
-# Task tracking for cancellation
-active_tasks = {}  # task_id -> {"cancelled": bool}
-tasks_lock = threading.Lock()
-
 class TTSRequest(BaseModel):
     text: str
     voice: str = "tara"
     output_filename: str = None
-    task_id: Optional[str] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -81,22 +75,8 @@ def get_voices():
         "default": "tara"
     }
 
-def is_task_cancelled(task_id: str) -> bool:
-    """Check if a task has been cancelled"""
-    with tasks_lock:
-        task = active_tasks.get(task_id)
-        return task["cancelled"] if task else False
-
 @app.post("/synthesize")
 def synthesize(request: TTSRequest):
-    task_id = request.task_id
-    
-    # Register task if task_id provided
-    if task_id:
-        with tasks_lock:
-            active_tasks[task_id] = {"cancelled": False}
-        logger.info(f"Orpheus TTS task {task_id} started")
-    
     try:
         if tts is None:
             raise HTTPException(
@@ -104,40 +84,27 @@ def synthesize(request: TTSRequest):
                 detail="TTS model not loaded. Please check HUGGINGFACE_TOKEN and model access permissions."
             )
         
-        # Check cancellation before starting
-        if task_id and is_task_cancelled(task_id):
-            logger.info(f"Orpheus TTS task {task_id} cancelled before synthesis")
-            raise HTTPException(status_code=499, detail="Task cancelled by user")
-        
         output_filename = request.output_filename or f"orpheus_output_{hash(request.text) % 10000}.wav"
         
         # Support both Docker and local deployment
-        # Docker: /tmp/orpheus_audio (mounted volume)
-        # Local: outputs/orpheus (local directory)
         if os.path.exists("/tmp/orpheus_audio"):
             output_path = f"/tmp/orpheus_audio/{output_filename}"
         else:
-            # Get the project root (2 levels up from services/modelOrpheus)
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
             output_dir = os.path.join(project_root, "outputs", "orpheus")
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, output_filename)
         
-        output_file = tts.synthesize(request.text, voice=request.voice, output_path=output_path, task_id=task_id)
+        output_file = tts.synthesize(request.text, voice=request.voice, output_path=output_path)
         
-        # Check cancellation after synthesis
-        if task_id and is_task_cancelled(task_id):
-            logger.info(f"Orpheus TTS task {task_id} cancelled after synthesis")
-            raise HTTPException(status_code=499, detail="Task cancelled by user")
-        
-        return {
-            "message": "Audio generated successfully",
-            "file": output_file,
-            "filename": output_filename,
-            "host_path": f"outputs/orpheus/{output_filename}",
-            "text": request.text,
-            "voice": request.voice
-        }
+        return JSONResponse(content={
+            "status": "success",
+            "audio_file": output_path,
+            "message": "Audio generated successfully"
+        })
+    except Exception as e:
+        logger.error(f"Error in Orpheus TTS synthesis: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -149,11 +116,19 @@ def synthesize(request: TTSRequest):
             )
         raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")
     finally:
-        # Clean up task
+        # DON'T clean up task immediately - keep it for a few seconds to allow in-flight cancel requests
+        # The task will be cleaned up by a background task or timeout
         if task_id:
-            with tasks_lock:
-                active_tasks.pop(task_id, None)
-            logger.info(f"Orpheus TTS task {task_id} cleaned up")
+            # Schedule cleanup after a delay to allow cancel requests to arrive
+            async def delayed_cleanup():
+                await asyncio.sleep(5)  # Wait 5 seconds before cleaning up
+                with tasks_lock:
+                    active_tasks.pop(task_id, None)
+                logger.info(f"Orpheus TTS task {task_id} cleaned up (delayed)")
+            
+            # Create task for delayed cleanup (fire and forget)
+            asyncio.create_task(delayed_cleanup())
+            logger.info(f"Orpheus TTS task {task_id} scheduled for cleanup in 5 seconds")
 
 @app.get("/synthesize")
 def synthesize_get(text: str, voice: str = "tara"):
@@ -184,12 +159,19 @@ def get_audio_file(filename: str):
 @app.post("/cancel/{task_id}")
 async def cancel_task(task_id: str):
     """Cancel an active task"""
+    logger.info(f"CANCEL REQUEST RECEIVED for task {task_id}")
     with tasks_lock:
+        logger.info(f"Active tasks BEFORE cancel: {active_tasks}")
         task = active_tasks.get(task_id)
         if task:
+            logger.info(f"Task {task_id} found, BEFORE setting cancelled: {task}")
             task["cancelled"] = True
-            logger.info(f"Orpheus TTS task {task_id} marked for cancellation")
+            # Verify it was actually set
+            logger.info(f"Task {task_id} AFTER setting cancelled: {task}")
+            logger.info(f"Active tasks AFTER cancel: {active_tasks}")
+            logger.info(f"Orpheus TTS task {task_id} MARKED FOR CANCELLATION - cancelled={task['cancelled']}")
             return {"status": "cancelled", "task_id": task_id}
         else:
-            logger.warning(f"Orpheus TTS task {task_id} not found (may have already completed)")
+            logger.warning(f"Orpheus TTS task {task_id} NOT FOUND in active tasks")
+            logger.warning(f"Available task IDs: {list(active_tasks.keys())}")
             return {"status": "not_found", "task_id": task_id}
