@@ -147,25 +147,28 @@ start_service "modelOrpheus" 5005
 # 2. Start Bark TTS (alternative TTS)
 start_service "modelBark" 5008
 
-# 3. Start Whisper ASR
+# 3. Start CSM TTS (conversational speech model)
+start_service "modelCSM" 5010
+
+# 4. Start Whisper ASR
 start_service "modelWhisper" 5007
 
 # Give TTS and ASR a moment to initialize
 sleep 3
 
-# 4. Start Meditron (depends on Orpheus)
+# 5. Start Meditron (depends on Orpheus)
 start_service "modelMeditron" 5006
 
-# 5. Start MultiMeditron (multimodal AI)
+# 6. Start MultiMeditron (multimodal AI)
 start_service "modelMultiMeditron" 5009
 
 # Give AI models time to load
 sleep 5
 
-# 6. Start WebUI API (depends on all services)
+# 7. Start WebUI API (depends on all services)
 start_service "webui" 8080
 
-# 7. Start Streamlit UI
+# 8. Start Streamlit UI
 start_streamlit "webui" 8501
 
 echo ""
@@ -179,6 +182,7 @@ echo "  - Meditron AI (text-only): http://localhost:5006"
 echo "  - MultiMeditron AI (multimodal): http://localhost:5009"
 echo "  - Orpheus TTS: http://localhost:5005"
 echo "  - Bark TTS: http://localhost:5008"
+echo "  - CSM TTS (conversational): http://localhost:5010"
 echo "  - Whisper ASR: http://localhost:5007"
 echo ""
 echo "Logs are available in the logs/ directory"
@@ -189,6 +193,7 @@ echo "  tail -f logs/modelMeditron.log"
 echo "  tail -f logs/modelMultiMeditron.log"
 echo "  tail -f logs/modelOrpheus.log"
 echo "  tail -f logs/modelBark.log"
+echo "  tail -f logs/modelCSM.log"
 echo "  tail -f logs/modelWhisper.log"
 echo ""
 echo "To stop all services:"
@@ -200,3 +205,42 @@ sleep 5
 echo ""
 echo "Opening Streamlit web interface..."
 open http://localhost:8501 2>/dev/null || xdg-open http://localhost:8501 2>/dev/null || echo "Please open http://localhost:8501 in your browser"
+echo ""
+
+# Start Orpheus monitoring in background
+echo "Starting Orpheus connection monitor..."
+(
+    while true; do
+        sleep 30  # Check every 30 seconds
+        
+        # Check if Orpheus log has connection timeout errors in the last 2 minutes
+        if tail -n 100 logs/modelOrpheus.log 2>/dev/null | grep -q "Connection timed out"; then
+            echo "[$(date)] Orpheus connection timeout detected. Restarting Orpheus..." >> logs/orpheus-monitor.log
+            
+            # Restart Orpheus
+            if [ -f .pids/modelOrpheus.pid ]; then
+                kill $(cat .pids/modelOrpheus.pid) 2>/dev/null
+                sleep 2
+                kill -9 $(cat .pids/modelOrpheus.pid) 2>/dev/null
+            fi
+            
+            # Start Orpheus with environment variables
+            cd services/modelOrpheus
+            source venv/bin/activate
+            export $(grep -v '^#' ../../.env | xargs)
+            nohup uvicorn app:app --host 0.0.0.0 --port 5005 > ../../logs/modelOrpheus.log 2>&1 &
+            echo $! > ../../.pids/modelOrpheus.pid
+            cd ../..
+            
+            echo "[$(date)] Orpheus restarted with PID $(cat .pids/modelOrpheus.pid)" >> logs/orpheus-monitor.log
+            
+            # Wait before checking again to avoid rapid restarts
+            sleep 120
+        fi
+    done
+) &
+
+MONITOR_PID=$!
+echo $MONITOR_PID > .pids/orpheus-monitor.pid
+echo "✓ Orpheus monitor started (PID: $MONITOR_PID)"
+echo "  Monitor logs: logs/orpheus-monitor.log"

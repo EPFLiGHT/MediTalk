@@ -267,6 +267,7 @@ MULTIMEDITRON_URL = os.getenv("MULTIMEDITRON_URL", "http://localhost:5009")
 MEDITRON_URL = os.getenv("MEDITRON_URL", "http://localhost:5006")
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
+CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
 WHISPER_URL = os.getenv("WHISPER_URL", "http://localhost:5007")
 
 # Helper function to load SVG icons
@@ -313,36 +314,40 @@ with st.sidebar:
     if generate_audio:
         tts_service = st.selectbox(
             "TTS Service",
-            ["orpheus", "bark"],
-            format_func=lambda x: "Orpheus TTS (Recommended)" if x == "orpheus" else "Bark TTS"
+            ["orpheus", "bark", "csm"],
+            format_func=lambda x: "Orpheus TTS (Recommended)" if x == "orpheus" else ("Bark TTS" if x == "bark" else "CSM (Conversational - Context-Aware)")
         )
         
-        # Load voices if not already loaded
-        if tts_service not in st.session_state.voices:
-            try:
-                voice_url = f"{ORPHEUS_URL if tts_service == 'orpheus' else BARK_URL}/voices"
-                response = requests.get(voice_url, timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    if tts_service == "orpheus":
-                        st.session_state.voices[tts_service] = {
-                            v['id']: f"{v['name']} ({v['gender']})" 
-                            for v in data.get('voices', [])
-                        }
-                    else:
-                        english_voices = data.get('voices', {}).get('english', [])
-                        st.session_state.voices[tts_service] = {
-                            v: v for v in english_voices
-                        }
-            except:
-                st.session_state.voices[tts_service] = {"tara": "Tara (default)"}
-        
-        voices = st.session_state.voices.get(tts_service, {"tara": "Tara (default)"})
-        voice = st.selectbox(
-            "Voice",
-            list(voices.keys()),
-            format_func=lambda x: voices[x]
-        )
+        # CSM doesn't use pre-defined voices (it's context-based)
+        if tts_service == "csm":
+            voice = '0'  # Store speaker ID as string for compatibility
+        else:
+            # Load voices if not already loaded for Orpheus and Bark
+            if tts_service not in st.session_state.voices:
+                try:
+                    voice_url = f"{ORPHEUS_URL if tts_service == 'orpheus' else BARK_URL}/voices"
+                    response = requests.get(voice_url, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if tts_service == "orpheus":
+                            st.session_state.voices[tts_service] = {
+                                v['id']: f"{v['name']} ({v['gender']})" 
+                                for v in data.get('voices', [])
+                            }
+                        else:
+                            english_voices = data.get('voices', {}).get('english', [])
+                            st.session_state.voices[tts_service] = {
+                                v: v for v in english_voices
+                            }
+                except:
+                    st.session_state.voices[tts_service] = {"tara": "Tara (default)"}
+            
+            voices = st.session_state.voices.get(tts_service, {"tara": "Tara (default)"})
+            voice = st.selectbox(
+                "Voice",
+                list(voices.keys()),
+                format_func=lambda x: voices[x]
+            )
     else:
         tts_service = "orpheus"
         voice = "tara"
@@ -352,33 +357,109 @@ with st.sidebar:
     # Voice Input Settings
     mic_icon = load_icon("microphone", 18, 18, "#667eea")
     st.markdown(f'<div style="display: flex; align-items: center; gap: 8px; margin-top: 1rem;"><span>{mic_icon}</span><span style="font-weight: 600; color: #2d3748;">Voice Input</span></div>', unsafe_allow_html=True)
-    use_voice_input = st.checkbox("Enable Voice Input", value=False)
+    use_voice_input = st.checkbox("Enable Voice Input", value=True)
     
     if use_voice_input:
-        audio_file = st.file_uploader(
-            "Upload audio file (WAV, MP3, M4A)",
-            type=['wav', 'mp3', 'm4a'],
-            help="Record on your device and upload here"
-        )
+        # Live microphone recording
+        st.markdown("**Record from Microphone**")
+        audio_bytes = st.audio_input("Click to record your question")
         
-        if audio_file and st.button("Transcribe Audio", use_container_width=True):
-            with st.spinner("Transcribing..."):
-                try:
-                    files = {'file': (audio_file.name, audio_file.getvalue(), audio_file.type)}
-                    response = requests.post(f"{WHISPER_URL}/transcribe", files=files, timeout=60)
+        if audio_bytes:
+            # Create a hash of the audio to track if we've already processed it
+            import hashlib
+            # Read the bytes for hashing
+            audio_bytes.seek(0)
+            audio_data = audio_bytes.read()
+            audio_hash = hashlib.md5(audio_data).hexdigest()
+            audio_bytes.seek(0)  # Reset for later use
+            
+            # Initialize last_processed_audio in session state if not exists
+            if 'last_processed_audio' not in st.session_state:
+                st.session_state.last_processed_audio = None
+            
+            # Only process if this is a new recording
+            if st.session_state.last_processed_audio != audio_hash:
+                st.session_state.last_processed_audio = audio_hash
+                
+                with st.spinner("Transcribing your voice..."):
+                    try:
+                        # Reset the audio bytes for reading
+                        audio_bytes.seek(0)
+                        audio_data_for_whisper = audio_bytes.read()
+                        
+                        # Send audio to Whisper for transcription
+                        files = {'audio_file': ('recording.wav', audio_data_for_whisper, 'audio/wav')}
+                        response = requests.post(f"{WHISPER_URL}/transcribe", files=files, timeout=60)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            transcribed_text = data.get('text', '')
+                            st.session_state.transcribed_text = transcribed_text
+                            
+                            # Upload audio to CSM for context (if CSM is selected)
+                            audio_url = None
+                            if tts_service == "csm":
+                                try:
+                                    # Upload the user's voice to CSM context
+                                    files_csm = {'audio_file': ('user_recording.wav', audio_data_for_whisper, 'audio/wav')}
+                                    csm_response = requests.post(f"{CSM_URL}/upload_context_audio", files=files_csm, timeout=30)
+                                    
+                                    if csm_response.status_code == 200:
+                                        csm_data = csm_response.json()
+                                        audio_url = csm_data.get('relative_path')
+                                        st.success(f"✓ Voice recorded for context")
+                                except Exception as e:
+                                    st.warning(f"Could not upload voice for context: {str(e)}")
+                            
+                            # Auto-submit the transcribed text with audio URL
+                            user_message = {
+                                "role": "user",
+                                "content": transcribed_text
+                            }
+                            
+                            # Add audio URL if available
+                            if audio_url:
+                                user_message["audio_url"] = audio_url
+                            
+                            st.session_state.conversation_history.append(user_message)
+                            st.success(f"✓ Transcribed: {transcribed_text}")
+                            st.rerun()
+                        else:
+                            st.error(f"Transcription failed: {response.status_code} - {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+                        import traceback
+                        st.error(traceback.format_exc())
+        
+        st.divider()
+        
+        # File upload option
+        # upload_file_icon = load_icon("upload_file", 18, 18, "#667eea")
+        # st.markdown(f'<div style="display: flex; align-items: center; gap: 8px; margin-top: 1rem;"><span>{upload_file_icon}</span><span style="font-weight: 600; color: #2d3748;">Or upload audio file</span></div>', unsafe_allow_html=True)
+        # audio_file = st.file_uploader(
+        #     "Upload audio file (WAV, MP3, M4A)",
+        #     type=['wav', 'mp3', 'm4a'],
+        #     help="Upload a pre-recorded audio file"
+        # )
+        
+        # if audio_file and st.button("Transcribe Uploaded File", use_container_width=True):
+        #     with st.spinner("Transcribing..."):
+        #         try:
+        #             files = {'audio_file': (audio_file.name, audio_file.getvalue(), audio_file.type)}
+        #             response = requests.post(f"{WHISPER_URL}/transcribe", files=files, timeout=60)
                     
-                    if response.status_code == 200:
-                        data = response.json()
-                        transcribed_text = data.get('text', '')
-                        st.session_state.transcribed_text = transcribed_text
-                        st.success("Transcription complete!")
-                        st.write(f"**Transcribed:** {transcribed_text}")
-                    else:
-                        st.error(f"Transcription failed: {response.status_code}")
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+        #             if response.status_code == 200:
+        #                 data = response.json()
+        #                 transcribed_text = data.get('text', '')
+        #                 st.session_state.transcribed_text = transcribed_text
+        #                 st.success("Transcription complete!")
+        #                 st.write(f"**Transcribed:** {transcribed_text}")
+        #             else:
+        #                 st.error(f"Transcription failed: {response.status_code} - {response.text}")
+        #         except Exception as e:
+        #             st.error(f"Error: {str(e)}")
     
-    st.divider()
+    # st.divider()
     
     # Advanced Settings
     with st.expander("Advanced Settings"):
@@ -440,6 +521,10 @@ if len(st.session_state.conversation_history) > 0:
             # Show audio player if available
             if 'audio_url' in msg and msg['audio_url']:
                 with st.expander("Listen to response"):
+                    # Show warning if context was skipped
+                    if msg.get('context_skipped', False):
+                        st.warning(":material/warning: Audio was generated without conversation context due to length constraints. The voice may sound less natural.", icon=":material/warning:")
+                    
                     audio_url = msg['audio_url']
                     if not audio_url.startswith('http'):
                         audio_url = f"http://localhost:8080{audio_url}"
@@ -508,6 +593,9 @@ if (len(st.session_state.conversation_history) > 0 and
                 
                 if generate_audio and data.get("audio_url"):
                     assistant_msg["audio_url"] = data["audio_url"]
+                    # Include context_skipped flag if present (for CSM warnings)
+                    if data.get("context_skipped"):
+                        assistant_msg["context_skipped"] = True
                 
                 st.session_state.conversation_history.append(assistant_msg)
                 st.session_state.processing = False

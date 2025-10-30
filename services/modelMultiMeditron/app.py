@@ -20,6 +20,7 @@ app = FastAPI(title="MultiMeditron Multimodal Medical AI Service", version="1.0.
 # Service URLs
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
+CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
 
 # Global model instance (following MultiMeditron README)
 model = None
@@ -58,6 +59,7 @@ def clean_text_for_tts(text: str) -> str:
 class ConversationMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
+    audio_url: Optional[str] = None  # Optional audio URL for CSM context
 
 class QuestionRequest(BaseModel):
     question: str
@@ -65,7 +67,7 @@ class QuestionRequest(BaseModel):
     temperature: float = 0.7
     generate_audio: bool = True
     voice: str = "tara"
-    tts_service: str = "orpheus"  # "orpheus" or "bark"
+    tts_service: str = "orpheus"  # "orpheus", "bark", or "csm"
     conversation_history: List[ConversationMessage] = []  # For maintaining conversation context
 
 class MedicalResponse(BaseModel):
@@ -73,6 +75,7 @@ class MedicalResponse(BaseModel):
     answer: str
     audio_file: Optional[str] = None
     audio_url: Optional[str] = None
+    context_skipped: Optional[bool] = None  # Flag for CSM when context was too long
 
 @app.on_event("startup")
 async def startup_event():
@@ -137,7 +140,7 @@ async def startup_event():
             add_generation_prompt=True
         )
         
-        logger.info("✅ MultiMeditron fully loaded and ready!")
+        logger.info("MultiMeditron fully loaded and ready!")
         
     except ImportError as e:
         logger.error(f"Failed to import MultiMeditron modules: {e}")
@@ -199,10 +202,18 @@ async def ask_question(request: QuestionRequest):
         if request.generate_audio:
             try:
                 logger.info(f"Generating audio with {request.tts_service}...")
-                audio_result = generate_audio(answer, request.voice, request.tts_service)
+                audio_result = generate_audio(
+                    text=answer, 
+                    voice=request.voice, 
+                    tts_service=request.tts_service,
+                    conversation_history=request.conversation_history
+                )
                 if audio_result:
                     response_data["audio_file"] = audio_result.get("filename")
                     response_data["audio_url"] = audio_result.get("url")
+                    # Include context_skipped flag if present (for CSM)
+                    if "context_skipped" in audio_result:
+                        response_data["context_skipped"] = audio_result["context_skipped"]
             except Exception as e:
                 logger.warning(f"Failed to generate audio: {e}")
         
@@ -282,44 +293,100 @@ def generate_fallback_response(question: str) -> str:
         f"Once the full model is loaded, you'll get real medical AI responses with multimodal support."
     )
 
-def generate_audio(text: str, voice: str, tts_service: str = "orpheus") -> Optional[Dict]:
+def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversation_history: List[ConversationMessage] = []) -> Optional[Dict]:
     """
-    Generate audio using specified TTS service (Orpheus or Bark)
+    Generate audio using specified TTS service (Orpheus, Bark, or CSM)
+    For CSM, conversation_history is used to provide context for more natural speech
     """
     try:
         # Clean markdown formatting from text before TTS
         clean_text = clean_text_for_tts(text)
         logger.info(f"Cleaned {len(text) - len(clean_text)} characters of markdown formatting for TTS")
         
-        # Select TTS service URL
-        tts_url = BARK_URL if tts_service == "bark" else ORPHEUS_URL
-        tts_name = tts_service.capitalize()
-        logger.info(f"Generating audio with {tts_name} TTS...")
-        
-        payload = {"text": clean_text, "voice": voice}
-        
-        response = requests.post(
-            f"{tts_url}/synthesize",
-            json=payload,
-            timeout=600  # Increased to 10 minutes for long text generation
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            filename = result.get('filename')
-            logger.info(f"Audio generated successfully with {tts_name}: {filename}")
-            # Add URL for WebUI to access the audio
-            return {
-                "filename": filename,
-                "url": f"http://localhost:8080/audio/{filename}"
+        # Handle CSM (Conversational Speech Model) - requires conversation context
+        if tts_service == "csm":
+            logger.info("Generating audio with CSM (conversational TTS)...")
+            
+            # Build conversation context for CSM
+            context_segments = []
+            for i, msg in enumerate(conversation_history[-10:]):  # Last 10 messages for context
+                # CSM uses speaker IDs: 0 for one speaker, 1 for another
+                # We'll use 0 for user, 1 for assistant
+                speaker_id = 0 if msg.role == "user" else 1
+                
+                # Check if this message has associated audio
+                audio_url = None
+                if hasattr(msg, 'audio_url') and msg.audio_url:
+                    audio_url = msg.audio_url
+                
+                context_segments.append({
+                    "text": clean_text_for_tts(msg.content),
+                    "speaker": speaker_id,
+                    "audio_url": audio_url
+                })
+            
+            # CSM needs to know which speaker is generating (assistant = 1)
+            speaker_id = int(voice) if voice in ["0", "1"] else 1
+            
+            payload = {
+                "text": clean_text,
+                "speaker": speaker_id,
+                "conversation_history": context_segments,
+                "max_audio_length_ms": 10000  # Per chunk - CSM now uses chunking
             }
-        elif response.status_code == 499:
-            # TTS service was cancelled
-            logger.info(f"TTS generation was cancelled on {tts_name} service")
-            raise Exception("Task cancelled by user")
+            
+            response = requests.post(
+                f"{CSM_URL}/synthesize",
+                json=payload,
+                timeout=600
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                filename = result.get('filename')
+                context_skipped = result.get('context_skipped', False)
+                logger.info(f"Audio generated successfully with CSM: {filename}")
+                if context_skipped:
+                    logger.warning("/!\ CSM context was skipped due to length constraints")
+                return {
+                    "filename": filename,
+                    "url": f"http://localhost:8080/audio/{filename}",
+                    "context_skipped": context_skipped
+                }
+            else:
+                logger.warning(f"Audio generation failed with CSM: {response.status_code}")
+                return None
+        
+        # Handle Orpheus or Bark (non-conversational TTS)
         else:
-            logger.warning(f"Audio generation failed with {tts_name}: {response.status_code}")
-            return None
+            tts_url = BARK_URL if tts_service == "bark" else ORPHEUS_URL
+            tts_name = tts_service.capitalize()
+            logger.info(f"Generating audio with {tts_name} TTS...")
+            
+            payload = {"text": clean_text, "voice": voice}
+            
+            response = requests.post(
+                f"{tts_url}/synthesize",
+                json=payload,
+                timeout=600  # Increased to 10 minutes for long text generation
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                filename = result.get('filename')
+                logger.info(f"Audio generated successfully with {tts_name}: {filename}")
+                # Add URL for WebUI to access the audio
+                return {
+                    "filename": filename,
+                    "url": f"http://localhost:8080/audio/{filename}"
+                }
+            elif response.status_code == 499:
+                # TTS service was cancelled
+                logger.info(f"TTS generation was cancelled on {tts_name} service")
+                raise Exception("Task cancelled by user")
+            else:
+                logger.warning(f"Audio generation failed with {tts_name}: {response.status_code}")
+                return None
             
     except Exception as e:
         logger.error(f"Error calling {tts_service} TTS service: {e}")

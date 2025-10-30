@@ -31,8 +31,11 @@ stop_service() {
     fi
 }
 
+# Stop Orpheus monitor first if running
+stop_service "orpheus-monitor"
+
 # Stop services in reverse order
-services=("webui-streamlit" "webui" "modelMultiMeditron" "modelMeditron" "modelBark" "modelWhisper" "modelOrpheus")
+services=("webui-streamlit" "webui" "modelMultiMeditron" "modelMeditron" "modelBark" "modelCSM" "modelWhisper" "modelOrpheus")
 
 for service in "${services[@]}"; do
     stop_service "$service"
