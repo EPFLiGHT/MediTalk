@@ -3,4 +3,4 @@ uvicorn[standard]
 jinja2
 python-multipart
 aiofiles
-requests
+requestsstreamlit>=1.28.0

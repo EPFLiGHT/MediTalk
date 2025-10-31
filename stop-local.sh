@@ -31,20 +31,24 @@ stop_service() {
     fi
 }
 
+# Stop Orpheus monitor first if running
+stop_service "orpheus-monitor"
+
 # Stop services in reverse order
-services=("webui" "modelMultiMeditron" "modelMeditron" "modelBark" "modelWhisper" "modelOrpheus")
+services=("webui-streamlit" "webui" "modelMultiMeditron" "modelMeditron" "modelBark" "modelCSM" "modelWhisper" "modelOrpheus")
 
 for service in "${services[@]}"; do
     stop_service "$service"
 done
 
-# Clean up any remaining uvicorn processes (safety measure)
+# Clean up any remaining uvicorn and streamlit processes (safety measure)
 pkill -f "uvicorn app:app" 2>/dev/null
+pkill -f "streamlit run" 2>/dev/null
 
 # Kill any remaining Python processes that might be blocking ports
 echo ""
 echo "Checking for processes blocking service ports..."
-for port in 5005 5006 5007 5008 5009 8080; do
+for port in 5005 5006 5007 5008 5009 8080 8501; do
     # Find process using the port (works without lsof)
     pid=$(ss -tulpn 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -1)
     if [ ! -z "$pid" ]; then

@@ -68,11 +68,13 @@ echo "✓ Environment configured successfully"
 # Create necessary directories
 mkdir -p outputs/orpheus
 mkdir -p outputs/bark
+mkdir -p outputs/csm
+mkdir -p outputs/csm/context
 mkdir -p models
 echo "✓ Created output directories"
 
 # Setup virtual environments for each service
-services=("webui" "modelMeditron" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelWhisper")
+services=("webui" "modelMeditron" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper")
 
 for service in "${services[@]}"; do
     echo ""

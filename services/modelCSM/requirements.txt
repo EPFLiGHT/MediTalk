@@ -1,4 +1,11 @@
 fastapi
 uvicorn[standard]
+python-multipart
+torch
+torchaudio
+# CSM dependencies from https://github.com/SesameAILabs/csm
+# Note: CSM requires transformers==4.49.0, so we install it first
+git+https://github.com/SesameAILabs/csm.git
+# Additional audio processing
 soundfile
-# Add CSM package later
+requests

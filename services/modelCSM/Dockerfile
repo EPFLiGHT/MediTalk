@@ -1,6 +1,9 @@
-FROM python:3.11
+FROM python:3.10
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# Disable lazy compilation in Mimi (required for CSM)
+ENV NO_TORCH_COMPILE=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -17,5 +20,8 @@ RUN pip install -r requirements.txt
 # Copy app code
 COPY . .
 
+# Expose port 5010 for CSM service
+EXPOSE 5010
+
 # Run FastAPI in foreground
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5010"]

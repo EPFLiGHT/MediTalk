@@ -91,7 +91,7 @@ echo "=========================================="
 # Quick recommendations
 if ! pgrep -f "uvicorn app:app" > /dev/null; then
     echo ""
-    echo "💡 Tip: Services are not running. Start them with:"
+    echo "Tip: Services are not running. Start them with:"
     echo "   ./start-local.sh"
 fi
 
@@ -100,7 +100,7 @@ if [ -f ".env" ]; then
     echo "✓ Configuration file (.env) found"
 else
     echo ""
-    echo "⚠️  Warning: No .env file found!"
+    echo "/!\  Warning: No .env file found!"
     echo "   Create one from .env.example and add your HUGGINGFACE_TOKEN"
 fi
 
