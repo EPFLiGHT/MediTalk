@@ -19,6 +19,7 @@ class TTSRequest(BaseModel):
     text: str
     voice: str = "tara"
     output_filename: str = None
+    generate_in_parallel: bool = True  # New parameter for parallel generation
 
 @app.on_event("startup")
 async def startup_event():
@@ -40,7 +41,16 @@ async def startup_event():
         model_name = os.getenv('ORPHEUS_MODEL', 'canopylabs/orpheus-3b-0.1-ft')
         logger.info(f"Using model: {model_name}")
         
-        tts = OrpheusTTS(model_name=model_name)
+        # Parallel configuration from environment variables
+        max_parallel = int(os.getenv('ORPHEUS_MAX_PARALLEL_CHUNKS', '16'))
+        
+        logger.info(f"Parallel configuration: max_parallel_chunks={max_parallel}")
+        logger.info("Model will use device_map='auto' for automatic layer distribution across GPUs")
+        
+        tts = OrpheusTTS(
+            model_name=model_name,
+            max_parallel_chunks=max_parallel
+        )
         logger.info("Orpheus TTS model loaded successfully!")
         
     except Exception as e:
@@ -95,13 +105,20 @@ def synthesize(request: TTSRequest):
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, output_filename)
         
-        output_file = tts.synthesize(request.text, voice=request.voice, output_path=output_path)
+        # Pass the generate_in_parallel parameter to the TTS engine
+        output_file = tts.synthesize(
+            request.text, 
+            voice=request.voice, 
+            output_path=output_path,
+            generate_in_parallel=request.generate_in_parallel
+        )
         
         return JSONResponse(content={
             "status": "success",
             "filename": output_filename,
             "audio_file": output_path,
-            "message": "Audio generated successfully"
+            "message": "Audio generated successfully",
+            "parallel_mode": request.generate_in_parallel
         })
     except Exception as e:
         logger.error(f"Error in Orpheus TTS synthesis: {str(e)}")

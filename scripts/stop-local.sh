@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Get the project root directory (parent of scripts folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 echo "Stopping MediTalk services..."
 echo "=============================="
 
@@ -35,7 +42,7 @@ stop_service() {
 stop_service "orpheus-monitor"
 
 # Stop services in reverse order
-services=("webui-streamlit" "webui" "modelMultiMeditron" "modelMeditron" "modelBark" "modelCSM" "modelWhisper" "modelOrpheus")
+services=("webui-streamlit" "webui" "modelMultiMeditron" "modelBark" "modelCSM" "modelWhisper" "modelOrpheus")
 
 for service in "${services[@]}"; do
     stop_service "$service"
@@ -61,7 +68,6 @@ done
 pkill -9 -f "modelOrpheus/venv" 2>/dev/null
 pkill -9 -f "modelWhisper/venv" 2>/dev/null
 pkill -9 -f "modelBark/venv" 2>/dev/null
-pkill -9 -f "modelMeditron/venv" 2>/dev/null
 pkill -9 -f "modelMultiMeditron/venv" 2>/dev/null
 pkill -9 -f "webui/venv" 2>/dev/null
 

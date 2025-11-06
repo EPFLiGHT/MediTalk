@@ -1,7 +1,16 @@
 #!/bin/bash
 
+# Get the project root directory (parent of scripts folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 echo "Setting up MediTalk for local (non-Docker) deployment"
 echo "======================================================"
+echo "Working directory: $PROJECT_ROOT"
+echo ""
 
 # Check Python version
 python_version=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
@@ -74,7 +83,7 @@ mkdir -p models
 echo "✓ Created output directories"
 
 # Setup virtual environments for each service
-services=("webui" "modelMeditron" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper")
+services=("webui" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper")
 
 for service in "${services[@]}"; do
     echo ""
@@ -111,8 +120,8 @@ echo "=========================================="
 echo "Setup complete! "
 echo ""
 echo "To start MediTalk:"
-echo "  ./start-local.sh"
+echo "  ./scripts/start-local.sh"
 echo ""
 echo "To stop MediTalk:"
-echo "  ./stop-local.sh"
+echo "  ./scripts/stop-local.sh"
 echo "=========================================="

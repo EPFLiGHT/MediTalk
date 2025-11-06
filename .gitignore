@@ -21,7 +21,7 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environments (DO NOT COMMIT)
+# Virtual Environments
 .env
 .venv
 env/
@@ -31,7 +31,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# Process IDs (runtime files)
+# Process IDs
 .pids/
 *.pid
 
@@ -67,10 +67,6 @@ outputs/*
 !outputs/.gitkeep
 
 # Model cache and downloads (LARGE FILES - DO NOT COMMIT)
-models/
-pretrained_models/
-**/pretrained_models/
-services/modelCosy/pretrained_models/
 .cache/
 *.bin
 *.safetensors
@@ -79,7 +75,7 @@ services/modelCosy/pretrained_models/
 *.pth
 *.whl
 
-# External repositories cloned as dependencies (DO NOT COMMIT)
+# External repositories cloned as dependencies
 services/modelMultiMeditron/multimeditron/
 
 # Temporary files
@@ -92,7 +88,7 @@ tmp/
 .env
 !.env.example
 
-# Jupyter Notebook
+# Jupyter Notebooks
 .ipynb_checkpoints
 
 # pytest
