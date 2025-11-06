@@ -8,9 +8,9 @@
 ## Overview
 
 MediTalk combines:
-- **MultiMeditron** - Multimodal medical AI (text + audio context)
-- **Text-to-Speech** - Orpheus TTS, Bark TTS, or CSM TTS
 - **Speech Recognition** (Whisper ASR) - Voice input
+- **MultiMeditron** - Multimodal medical AI
+- **Text-to-Speech** - Orpheus TTS, Bark TTS, or CSM TTS
 - **Web Interface** - Interactive testing platform
 
 ### Complete Voice Pipeline
@@ -20,7 +20,6 @@ Voice/Text Input ──▶ Speech-to-Text ──▶ MultiMeditron ──▶ TTS 
 
 ## Quick Start
 
-### Prerequisites
 ### Prerequisites
 - **Python 3.10+**
 - **HuggingFace account** with token ([get one here](https://huggingface.co/settings/tokens))
@@ -102,51 +101,6 @@ For deployment on the EPFL RCP cluster, please refer to the [LiGHT RCP Documenta
 
 Switch models by editing `.env` and restarting services.
 
-## API Usage
-
-Notes: 
-- We recommend using the Web UI for easier interaction. Below are example `curl` commands for direct API access.
-- Make sure services are running before making requests.
-
-### Medical AI Query
-```bash
-curl -X POST "http://localhost:5009/ask" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What is hypertension?",
-    "generate_audio": true,
-    "voice": "tara",
-    "tts_service": "orpheus"
-  }'
-```
-
-Parameters:
-- `question`: Medical question to ask
-- `generate_audio`: (bool) Whether to generate spoken response
-- `voice`: Voice model to use for TTS (default: "tara", other voices may be available later)
-
-### Text-to-Speech
-```bash
-curl -X POST "http://localhost:5005/synthesize" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Hello, this is MediTalk",
-    "voice": "tara"
-  }'
-```
-
-Parameters:
-- `text`: Text to convert to speech
-- `voice`: Voice model to use (default: "tara") 
-
-### Speech-to-Text
-```bash
-curl -X POST "http://localhost:5007/transcribe" \
-  -F "file=@audio.wav"
-```
-Parameters:
-- `file`: Audio file to transcribe (WAV format recommended, other formats were not tested)
-
 ## Troubleshooting
 
 ### Local Deployment Issues
@@ -218,11 +172,6 @@ All scripts are located in the `scripts/` folder:
 - `restart.sh` - Restarts all services
 - `health-check.sh` - Checks service health status
 - `monitor-gpus.sh` - Real-time GPU monitoring
-```
-
-### Key Files
-
-- `monitor-gpus.sh` - Real-time GPU monitoring
 
 
 ## Research Context
@@ -253,8 +202,6 @@ Goal: Fine-tune Qwen model for end-to-end conversational speech generation with 
 
 ### Future Research
 - **[Qwen](https://github.com/QwenLM/Qwen)** - Target model for conversational speech fine-tuning
-
----
 
 ---
 
