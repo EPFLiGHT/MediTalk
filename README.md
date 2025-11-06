@@ -23,7 +23,7 @@ Voice/Text Input ──▶ Speech-to-Text ──▶ MultiMeditron ──▶ TTS 
 ### Prerequisites
 - **Python 3.10+**
 - **HuggingFace account** with token ([get one here](https://huggingface.co/settings/tokens))
-- **16GB+ RAM** recommended for MultiMeditron
+- **48GB+ RAM** recommended for all services to run smoothly
 
 ### 1. Configure Environment
 
@@ -92,11 +92,11 @@ For deployment on the EPFL RCP cluster, please refer to the [LiGHT RCP Documenta
 - **OpenAI Whisper**: Multiple sizes available (tiny, base, small, medium, large)
 
 ### AI Models
-- **MultiMeditron**: Multimodal medical AI with audio context awareness (~8GB model + 8GB base LLM)
+- **MultiMeditron**: Multimodal medical AI (~8GB model + 8GB base LLM)
 
 ### TTS Models
-- **Orpheus**: Medical-focused voice (best for medical terminology)
-- **Bark**: Multilingual support with multiple voice presets
+- **Orpheus**: High quality voice generation (multiple voice presets)
+- **Bark**: Multilingual support (multiple voice presets)
 - **CSM (Sesame)**: Conversational speech model with context-based voice cloning
 
 Switch models by editing `.env` and restarting services.
