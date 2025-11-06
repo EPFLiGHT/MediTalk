@@ -10,6 +10,8 @@ from transformers import AutoTokenizer
 from PIL import Image
 import io
 import tempfile
+from pathlib import Path
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +23,10 @@ app = FastAPI(title="MultiMeditron Multimodal Medical AI Service", version="1.0.
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
 CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
+
+# Create output directory for text responses
+OUTPUT_DIR = Path("/mloscratch/users/teissier/MediTalk/outputs/multimeditron")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global model instance (following MultiMeditron README)
 model = None
@@ -69,6 +75,7 @@ class QuestionRequest(BaseModel):
     voice: str = "tara"
     tts_service: str = "orpheus"  # "orpheus", "bark", or "csm"
     conversation_history: List[ConversationMessage] = []  # For maintaining conversation context
+    generate_in_parallel: bool = True  # For Orpheus TTS parallel processing
 
 class MedicalResponse(BaseModel):
     question: str
@@ -198,6 +205,21 @@ async def ask_question(request: QuestionRequest):
             "answer": answer,
         }
         
+        # Save text response for debugging
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            text_filename = f"response_{timestamp}.txt"
+            text_path = OUTPUT_DIR / text_filename
+            with open(text_path, "w") as f:
+                f.write(f"QUESTION:\n{request.question}\n\n")
+                f.write(f"ANSWER:\n{answer}\n\n")
+                f.write(f"TIMESTAMP: {timestamp}\n")
+                f.write(f"TEMPERATURE: {request.temperature}\n")
+                f.write(f"MAX_LENGTH: {request.max_length}\n")
+            logger.info(f"Saved text response to {text_filename}")
+        except Exception as e:
+            logger.warning(f"Failed to save text response: {e}")
+        
         # Generate audio if requested
         if request.generate_audio:
             try:
@@ -206,7 +228,8 @@ async def ask_question(request: QuestionRequest):
                     text=answer, 
                     voice=request.voice, 
                     tts_service=request.tts_service,
-                    conversation_history=request.conversation_history
+                    conversation_history=request.conversation_history,
+                    generate_in_parallel=request.generate_in_parallel
                 )
                 if audio_result:
                     response_data["audio_file"] = audio_result.get("filename")
@@ -269,7 +292,11 @@ def generate_multimeditron_response(
     
     # Generate using model (following README)
     with torch.no_grad():
-        outputs = model.generate(batch=batch, temperature=temperature)
+        outputs = model.generate(
+            batch=batch, 
+            temperature=temperature,
+            max_new_tokens=max_length
+        )
     
     # Decode output (following README)
     response_text = tokenizer.batch_decode(
@@ -293,10 +320,14 @@ def generate_fallback_response(question: str) -> str:
         f"Once the full model is loaded, you'll get real medical AI responses with multimodal support."
     )
 
-def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversation_history: List[ConversationMessage] = []) -> Optional[Dict]:
+def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversation_history: List[ConversationMessage] = [], generate_in_parallel: bool = True) -> Optional[Dict]:
     """
     Generate audio using specified TTS service (Orpheus, Bark, or CSM)
     For CSM, conversation_history is used to provide context for more natural speech
+    For Orpheus, generate_in_parallel controls dynamic multi-instance parallelization
+    
+    Returns:
+        {"filename": str, "url": str}
     """
     try:
         # Clean markdown formatting from text before TTS
@@ -347,7 +378,7 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversa
                 context_skipped = result.get('context_skipped', False)
                 logger.info(f"Audio generated successfully with CSM: {filename}")
                 if context_skipped:
-                    logger.warning("/!\ CSM context was skipped due to length constraints")
+                    logger.warning(r"/!\ CSM context was skipped due to length constraints")
                 return {
                     "filename": filename,
                     "url": f"http://localhost:8080/audio/{filename}",
@@ -359,11 +390,22 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversa
         
         # Handle Orpheus or Bark (non-conversational TTS)
         else:
-            tts_url = BARK_URL if tts_service == "bark" else ORPHEUS_URL
-            tts_name = tts_service.capitalize()
+            # Determine TTS URL
+            if tts_service == "orpheus":
+                tts_url = ORPHEUS_URL
+                tts_name = "Orpheus"
+            else:
+                tts_url = BARK_URL
+                tts_name = "Bark"
+            
             logger.info(f"Generating audio with {tts_name} TTS...")
             
             payload = {"text": clean_text, "voice": voice}
+            
+            # Add generate_in_parallel parameter for Orpheus
+            if tts_service == "orpheus":
+                payload["generate_in_parallel"] = generate_in_parallel
+                logger.info(f"Orpheus parallel mode: {generate_in_parallel}")
             
             response = requests.post(
                 f"{tts_url}/synthesize",

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Header, UploadFile, File
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, Response
+from fastapi.responses import HTMLResponse, Response
 import requests
 import logging
 import os
@@ -216,7 +216,7 @@ async def proxy_audio(request: Request, filename: str, range: Optional[str] = He
 
     try:
         # Determine which TTS service based on filename pattern
-        # Bark files start with "bark_", CSM files start with "csm_", Orpheus files don't have a prefix
+        # Bark files start with "bark_", CSM files start with "csm_", Orpheus files start with "orpheus_output_"
         if filename.startswith("bark_"):
             tts_url = BARK_URL
             tts_name = "Bark"
@@ -258,10 +258,12 @@ async def proxy_audio(request: Request, filename: str, range: Optional[str] = He
             headers["Range"] = range
             
         # Forward request to the appropriate TTS service
+        # Increased timeout for large streaming audio files
         response = requests.get(
             f"{tts_url}/audio/{filename}",
             headers=headers,
-            timeout=30
+            timeout=120,
+            stream=True
         )
         
         if response.status_code in [200, 206]:  # 206 for partial content

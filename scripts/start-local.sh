@@ -1,14 +1,22 @@
 #!/bin/bash
 
+# Get the project root directory (parent of scripts folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 echo "Starting MediTalk - Medical AI with Voice (Local Mode)"
 echo "======================================================="
+echo "Working directory: $PROJECT_ROOT"
+echo ""
 
 # Kill any orphaned processes from previous manual starts
 echo "Cleaning up any orphaned processes..."
 pkill -9 -f "services/modelOrpheus.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelBark.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelWhisper.*python.*app.py" 2>/dev/null
-pkill -9 -f "services/modelMeditron.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelMultiMeditron.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/webui.*python.*app.py" 2>/dev/null
 sleep 2
@@ -18,7 +26,7 @@ echo ""
 # Check if .env file exists
 if [ ! -f .env ]; then
     echo "ERROR: .env file not found!"
-    echo "Please run ./setup-local.sh first"
+    echo "Please run ./scripts/setup-local.sh first"
     exit 1
 fi
 
@@ -64,13 +72,11 @@ fi
 
 # Ensure critical variables are set with defaults
 export HUGGINGFACE_TOKEN
-export MEDITRON_MODEL=${MEDITRON_MODEL:-"epfl-llm/meditron-7b"}
 export MULTIMEDITRON_MODEL=${MULTIMEDITRON_MODEL:-"ClosedMeditron/Mulimeditron-End2End-CLIP-medical"}
 export ORPHEUS_MODEL=${ORPHEUS_MODEL:-"canopylabs/orpheus-3b-0.1-ft"}
 export WHISPER_MODEL=${WHISPER_MODEL:-"tiny"}
 
 echo "Environment configured:"
-echo "  - Meditron Model: $MEDITRON_MODEL"
 echo "  - MultiMeditron Model: $MULTIMEDITRON_MODEL"
 echo "  - Orpheus Model: $ORPHEUS_MODEL"
 echo "  - Whisper Model: $WHISPER_MODEL"
@@ -92,18 +98,52 @@ start_service() {
     # Check if virtual environment exists
     if [ ! -d "$venv_dir" ]; then
         echo "ERROR: Virtual environment not found for $service"
-        echo "Please run ./setup-local.sh first"
+        echo "Please run ./scripts/setup-local.sh first"
         exit 1
     fi
     
     # Start the service in background
+    # Restrict to GPUs 0-1-2 (available GPUs for services)
     cd "$service_dir"
     source venv/bin/activate
+    export CUDA_VISIBLE_DEVICES=0,1,2
     nohup uvicorn app:app --host 0.0.0.0 --port $port > "../../logs/$service.log" 2>&1 &
     echo $! > "../../$pid_file"
+    unset CUDA_VISIBLE_DEVICES
     cd ../..
     
     echo "  ✓ $service started (PID: $(cat $pid_file))"
+}
+
+# Function to start a service with custom GPU selection
+start_service_gpu() {
+    local service=$1
+    local port=$2
+    local gpu=$3
+    local service_dir="services/$service"
+    local venv_dir="$service_dir/venv"
+    local pid_file=".pids/$service.pid"
+    
+    echo "Starting $service on port $port (GPU $gpu)..."
+    
+    # Check if virtual environment exists
+    if [ ! -d "$venv_dir" ]; then
+        echo "ERROR: Virtual environment not found for $service"
+        echo "Please run ./scripts/setup-local.sh first"
+        exit 1
+    fi
+    
+    # Start the service in background with CUDA_VISIBLE_DEVICES set
+    cd "$service_dir"
+    source venv/bin/activate
+    # Export BEFORE nohup to ensure it's inherited
+    export CUDA_VISIBLE_DEVICES=$gpu
+    nohup uvicorn app:app --host 0.0.0.0 --port $port > "../../logs/$service.log" 2>&1 &
+    echo $! > "../../$pid_file"
+    unset CUDA_VISIBLE_DEVICES  # Clean up
+    cd ../..
+    
+    echo "  ✓ $service started (PID: $(cat $pid_file)) on GPU $gpu"
 }
 
 # Function to start Streamlit service
@@ -119,11 +159,11 @@ start_streamlit() {
     # Check if virtual environment exists
     if [ ! -d "$venv_dir" ]; then
         echo "ERROR: Virtual environment not found for $service"
-        echo "Please run ./setup-local.sh first"
+        echo "Please run ./scripts/setup-local.sh first"
         exit 1
     fi
     
-    # Start Streamlit in background
+    # Start Streamlit in background (no GPU needed for web interface)
     cd "$service_dir"
     source venv/bin/activate
     nohup python -m streamlit run streamlit_app.py --server.port $port --server.address 0.0.0.0 --server.headless true > "../../logs/$service-streamlit.log" 2>&1 &
@@ -156,29 +196,25 @@ start_service "modelWhisper" 5007
 # Give TTS and ASR a moment to initialize
 sleep 3
 
-# 5. Start Meditron (depends on Orpheus)
-start_service "modelMeditron" 5006
-
-# 6. Start MultiMeditron (multimodal AI)
+# 5. Start MultiMeditron (multimodal AI)
 start_service "modelMultiMeditron" 5009
 
 # Give AI models time to load
 sleep 5
 
-# 7. Start WebUI API (depends on all services)
+# 6. Start WebUI API (depends on all services)
 start_service "webui" 8080
 
-# 8. Start Streamlit UI
-start_streamlit "webui" 8501
+# 7. Start Streamlit UI
+start_streamlit "webui" 8503
 
 echo ""
 echo "=========================================="
 echo "All services started! "
 echo ""
 echo "Service URLs:"
-echo "  - Streamlit Web Interface: http://localhost:8501"
+echo "  - Streamlit Web Interface: http://localhost:8503"
 echo "  - FastAPI Web Interface: http://localhost:8080"
-echo "  - Meditron AI (text-only): http://localhost:5006"
 echo "  - MultiMeditron AI (multimodal): http://localhost:5009"
 echo "  - Orpheus TTS: http://localhost:5005"
 echo "  - Bark TTS: http://localhost:5008"
@@ -189,7 +225,6 @@ echo "Logs are available in the logs/ directory"
 echo ""
 echo "To check service status:"
 echo "  tail -f logs/webui.log"
-echo "  tail -f logs/modelMeditron.log"
 echo "  tail -f logs/modelMultiMeditron.log"
 echo "  tail -f logs/modelOrpheus.log"
 echo "  tail -f logs/modelBark.log"
@@ -197,14 +232,14 @@ echo "  tail -f logs/modelCSM.log"
 echo "  tail -f logs/modelWhisper.log"
 echo ""
 echo "To stop all services:"
-echo "  ./stop-local.sh"
+echo "  ./scripts/stop-local.sh"
 echo "=========================================="
 echo ""
 echo "Waiting for services to be ready..."
 sleep 5
 echo ""
 echo "Opening Streamlit web interface..."
-open http://localhost:8501 2>/dev/null || xdg-open http://localhost:8501 2>/dev/null || echo "Please open http://localhost:8501 in your browser"
+open http://localhost:8503 2>/dev/null || xdg-open http://localhost:8503 2>/dev/null || echo "Please open http://localhost:8503 in your browser"
 echo ""
 
 # Start Orpheus monitoring in background

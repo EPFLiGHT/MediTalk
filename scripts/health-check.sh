@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Get the project root directory (parent of scripts folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 echo "=========================================="
 echo "  MediTalk Health Check"
 echo "=========================================="
@@ -52,7 +59,7 @@ if pgrep -f "uvicorn app:app" > /dev/null; then
     ps aux | grep "[u]vicorn app:app" | awk '{printf "  PID: %-6s Port: %s\n", $2, $0}' | grep -o "PID.*[0-9]\{4\}"
 else
     echo -e "${YELLOW}No uvicorn processes found${NC}"
-    echo "Services may not be running. Try: ./start-local.sh"
+    echo "Services may not be running. Try: ./scripts/start-local.sh"
 fi
 
 echo ""
@@ -92,7 +99,7 @@ echo "=========================================="
 if ! pgrep -f "uvicorn app:app" > /dev/null; then
     echo ""
     echo "Tip: Services are not running. Start them with:"
-    echo "   ./start-local.sh"
+    echo "   ./scripts/start-local.sh"
 fi
 
 if [ -f ".env" ]; then
