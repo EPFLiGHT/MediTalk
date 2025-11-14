@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse, FileResponse
 import whisper
 import tempfile
@@ -29,6 +29,7 @@ if DEBUG_AUDIO:
 class TranscriptionResponse(BaseModel):
     text: str
     language: Optional[str] = None
+    detected_language: Optional[str] = None
     confidence: Optional[float] = None
 
 @app.on_event("startup")
@@ -49,12 +50,29 @@ async def startup_event():
 @app.get("/health")
 def health_check():
     if whisper_model is None:
-        return {"status": "unhealthy", "model": "openai-whisper", "error": "Model not loaded"}
-    return {"status": "healthy", "model": "openai-whisper"}
+        return {
+            "status": "unhealthy", 
+            "model": "openai-whisper", 
+            "error": "Model not loaded"
+        }
+    return {
+        "status": "healthy", 
+        "model": "openai-whisper",
+        "supported_languages": ["auto", "en", "fr"]  # Auto-detect, English, French
+    }
 
 @app.post("/transcribe", response_model=TranscriptionResponse)
-async def transcribe_audio(audio_file: UploadFile = File(...)):
-    """Transcribe uploaded audio file to text"""
+async def transcribe_audio(
+    audio_file: UploadFile = File(...),
+    language: Optional[str] = Form(None)
+):
+    """
+    Transcribe uploaded audio file to text
+    
+    Args:
+        audio_file: Audio file to transcribe
+        language: Language code ("en", "fr", or None for auto-detection)
+    """
     if whisper_model is None:
         raise HTTPException(status_code=503, detail="Whisper model not loaded")
     
@@ -80,24 +98,32 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
         
         try:
             # Transcribe with Whisper using the loaded model
-            logger.info("Starting transcription process using loaded Whisper model...")
+            # Determine language mode
+            if language and language.lower() != "auto":
+                logger.info(f"Starting transcription with specified language: {language}")
+                transcribe_kwargs = {
+                    "language": language.lower(),
+                    "fp16": False
+                }
+            else:
+                logger.info("Starting transcription with auto language detection...")
+                transcribe_kwargs = {
+                    "fp16": False
+                    # No language parameter = auto-detect
+                }
             
             # Use the whisper model directly (already loaded at startup)
-            result = whisper_model.transcribe(
-                tmp_file_path,
-                language="en",
-                fp16=False
-            )
+            result = whisper_model.transcribe(tmp_file_path, **transcribe_kwargs)
             
             text = result["text"].strip()
-            logger.info(f"Transcription completed: '{text[:100]}...'")
+            detected_lang = result.get("language", "unknown")
             
-            # Get detected language (for info)
-            detected_language = result.get("language", "en")
+            logger.info(f"Transcription completed (detected: {detected_lang}): '{text[:100]}...'")
             
             response = TranscriptionResponse(
                 text=text,
-                language=detected_language,
+                language=language if language else "auto",
+                detected_language=detected_lang,
                 confidence=None
             )
             

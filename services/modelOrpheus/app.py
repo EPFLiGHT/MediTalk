@@ -12,20 +12,30 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Orpheus TTS Service", version="1.0.0")
 
-# Global TTS instance
-tts = None
+# Global TTS instances (one for each language)
+tts_instances = {
+    "en": None,  # English model
+    "fr": None   # French model
+}
+
+# Model configurations
+MODELS = {
+    "en": "canopylabs/orpheus-3b-0.1-ft",
+    "fr": "canopylabs/3b-fr-ft-research_release"
+}
 
 class TTSRequest(BaseModel):
     text: str
     voice: str = "tara"
     output_filename: str = None
     generate_in_parallel: bool = True  # New parameter for parallel generation
+    language: str = "en"  # Language: "en" for English, "fr" for French
 
 @app.on_event("startup")
 async def startup_event():
-    global tts
+    global tts_instances
     try:
-        logger.info("Initializing Orpheus TTS model...")
+        logger.info("Initializing Orpheus TTS models...")
         
         # Check for HF token
         hf_token = os.getenv('HUGGINGFACE_TOKEN')
@@ -34,39 +44,65 @@ async def startup_event():
             logger.error("To fix this:")
             logger.error("   1. Get a token from: https://huggingface.co/settings/tokens")
             logger.error("   2. Request access to: https://huggingface.co/canopylabs/orpheus-3b-0.1-ft")
-            logger.error("   3. Set HUGGINGFACE_TOKEN in your .env file")
+            logger.error("   3. Request access to: https://huggingface.co/canopylabs/3b-fr-ft-research_release")
+            logger.error("   4. Set HUGGINGFACE_TOKEN in your .env file")
             raise ValueError("Missing HUGGINGFACE_TOKEN")
-        
-        # Allow model override via environment variable
-        model_name = os.getenv('ORPHEUS_MODEL', 'canopylabs/orpheus-3b-0.1-ft')
-        logger.info(f"Using model: {model_name}")
         
         # Parallel configuration from environment variables
         max_parallel = int(os.getenv('ORPHEUS_MAX_PARALLEL_CHUNKS', '16'))
-        
         logger.info(f"Parallel configuration: max_parallel_chunks={max_parallel}")
-        logger.info("Model will use device_map='auto' for automatic layer distribution across GPUs")
         
-        tts = OrpheusTTS(
-            model_name=model_name,
-            max_parallel_chunks=max_parallel
-        )
-        logger.info("Orpheus TTS model loaded successfully!")
+        # Determine which languages to load based on environment variable
+        # Default: load only English model
+        languages_to_load = os.getenv('ORPHEUS_LANGUAGES', 'en').split(',')
+        
+        for lang in languages_to_load:
+            lang = lang.strip()
+            if lang in MODELS:
+                try:
+                    model_name = MODELS[lang]
+                    logger.info(f"Loading {lang.upper()} model: {model_name}")
+                    
+                    tts_instances[lang] = OrpheusTTS(
+                        model_name=model_name,
+                        max_parallel_chunks=max_parallel
+                    )
+                    logger.info(f"✓ {lang.upper()} model loaded successfully!")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to load {lang.upper()} model: {e}")
+                    tts_instances[lang] = None
+            else:
+                logger.warning(f"Unknown language '{lang}' - skipping")
+        
+        # Log available languages
+        available = [lang for lang, tts in tts_instances.items() if tts is not None]
+        if available:
+            logger.info(f"Available languages: {', '.join(available)}")
+        else:
+            logger.error("No TTS models loaded successfully!")
         
     except Exception as e:
-        logger.error(f"Failed to load Orpheus TTS model: {e}")
+        logger.error(f"Failed to load Orpheus TTS models: {e}")
         # Don't raise the exception - let the service start but return errors for requests
-        tts = None
 
 @app.get("/health")
 def health_check():
-    if tts is None:
+    available_languages = [lang for lang, tts in tts_instances.items() if tts is not None]
+    
+    if not available_languages:
         return {
             "status": "unhealthy", 
             "model": "orpheus",
-            "error": "Model not loaded - check logs for authentication issues"
+            "error": "No models loaded - check logs for authentication issues",
+            "available_languages": []
         }
-    return {"status": "healthy", "model": "orpheus"}
+    
+    return {
+        "status": "healthy", 
+        "model": "orpheus",
+        "available_languages": available_languages
+    }
 
 @app.get("/voices")
 def get_voices():
@@ -88,13 +124,18 @@ def get_voices():
 @app.post("/synthesize")
 def synthesize(request: TTSRequest):
     try:
+        # Get the TTS instance for the requested language
+        language = request.language.lower()
+        tts = tts_instances.get(language)
+        
         if tts is None:
+            available = [lang for lang, instance in tts_instances.items() if instance is not None]
             raise HTTPException(
-                status_code=503, 
-                detail="TTS model not loaded. Please check HUGGINGFACE_TOKEN and model access permissions."
+                status_code=400,
+                detail=f"Language '{language}' not available. Available languages: {', '.join(available)}"
             )
         
-        output_filename = request.output_filename or f"orpheus_output_{hash(request.text) % 10000}.wav"
+        output_filename = request.output_filename or f"orpheus_output_{language}_{hash(request.text) % 10000}.wav"
         
         # Support both Docker and local deployment
         if os.path.exists("/tmp/orpheus_audio"):
@@ -118,8 +159,11 @@ def synthesize(request: TTSRequest):
             "filename": output_filename,
             "audio_file": output_path,
             "message": "Audio generated successfully",
-            "parallel_mode": request.generate_in_parallel
+            "parallel_mode": request.generate_in_parallel,
+            "language": language
         })
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in Orpheus TTS synthesis: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

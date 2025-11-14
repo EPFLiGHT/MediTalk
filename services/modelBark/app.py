@@ -208,21 +208,33 @@ def list_voices():
             "v2/en_speaker_8",
             "v2/en_speaker_9"
         ],
-        "multilingual": [
-            "v2/de_speaker_0",  # German
-            "v2/de_speaker_1",
-            "v2/es_speaker_0",  # Spanish
-            "v2/fr_speaker_0",  # French
-            "v2/hi_speaker_0",  # Hindi
-            "v2/it_speaker_0",  # Italian
-            "v2/ja_speaker_0",  # Japanese
-            "v2/ko_speaker_0",  # Korean
-            "v2/pl_speaker_0",  # Polish
-            "v2/pt_speaker_0",  # Portuguese
-            "v2/ru_speaker_0",  # Russian
-            "v2/tr_speaker_0",  # Turkish
-            "v2/zh_speaker_0"   # Chinese
-        ]
+        "french": [
+            "v2/fr_speaker_0",
+            "v2/fr_speaker_1",
+            "v2/fr_speaker_2",
+            "v2/fr_speaker_3",
+            "v2/fr_speaker_4",
+            "v2/fr_speaker_5",
+            "v2/fr_speaker_6",
+            "v2/fr_speaker_7",
+            "v2/fr_speaker_8",
+            "v2/fr_speaker_9"
+        ] #,
+        # "multilingual": [
+        #     "v2/de_speaker_0",  # German
+        #     "v2/de_speaker_1",
+        #     "v2/es_speaker_0",  # Spanish
+        #     "v2/fr_speaker_0",  # French
+        #     "v2/hi_speaker_0",  # Hindi
+        #     "v2/it_speaker_0",  # Italian
+        #     "v2/ja_speaker_0",  # Japanese
+        #     "v2/ko_speaker_0",  # Korean
+        #     "v2/pl_speaker_0",  # Polish
+        #     "v2/pt_speaker_0",  # Portuguese
+        #     "v2/ru_speaker_0",  # Russian
+        #     "v2/tr_speaker_0",  # Turkish
+        #     "v2/zh_speaker_0"   # Chinese
+        # ]
     }
     
     return {

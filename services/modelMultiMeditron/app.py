@@ -74,6 +74,7 @@ class QuestionRequest(BaseModel):
     generate_audio: bool = True
     voice: str = "tara"
     tts_service: str = "orpheus"  # "orpheus", "bark", or "csm"
+    language: str = "en"  # Language for Orpheus TTS: "en" or "fr"
     conversation_history: List[ConversationMessage] = []  # For maintaining conversation context
     generate_in_parallel: bool = True  # For Orpheus TTS parallel processing
 
@@ -228,6 +229,7 @@ async def ask_question(request: QuestionRequest):
                     text=answer, 
                     voice=request.voice, 
                     tts_service=request.tts_service,
+                    language=request.language,
                     conversation_history=request.conversation_history,
                     generate_in_parallel=request.generate_in_parallel
                 )
@@ -320,11 +322,12 @@ def generate_fallback_response(question: str) -> str:
         f"Once the full model is loaded, you'll get real medical AI responses with multimodal support."
     )
 
-def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversation_history: List[ConversationMessage] = [], generate_in_parallel: bool = True) -> Optional[Dict]:
+def generate_audio(text: str, voice: str, tts_service: str = "orpheus", language: str = "en", conversation_history: List[ConversationMessage] = [], generate_in_parallel: bool = True) -> Optional[Dict]:
     """
     Generate audio using specified TTS service (Orpheus, Bark, or CSM)
     For CSM, conversation_history is used to provide context for more natural speech
     For Orpheus, generate_in_parallel controls dynamic multi-instance parallelization
+    For Orpheus, language controls which model to use ("en" or "fr")
     
     Returns:
         {"filename": str, "url": str}
@@ -405,7 +408,8 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", conversa
             # Add generate_in_parallel parameter for Orpheus
             if tts_service == "orpheus":
                 payload["generate_in_parallel"] = generate_in_parallel
-                logger.info(f"Orpheus parallel mode: {generate_in_parallel}")
+                payload["language"] = language
+                logger.info(f"Orpheus parallel mode: {generate_in_parallel}, language: {language}")
             
             response = requests.post(
                 f"{tts_url}/synthesize",
