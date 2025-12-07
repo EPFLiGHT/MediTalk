@@ -1,4 +1,0 @@
-requests
-soundfile
-pandas
-numpy

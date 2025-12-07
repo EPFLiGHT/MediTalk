@@ -83,7 +83,7 @@ mkdir -p models
 echo "✓ Created output directories"
 
 # Setup virtual environments for each service
-services=("webui" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper")
+services=("webui" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper" "modelQwen3Omni")
 
 for service in "${services[@]}"; do
     echo ""

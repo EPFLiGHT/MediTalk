@@ -136,7 +136,6 @@ start_service_gpu() {
     # Start the service in background with CUDA_VISIBLE_DEVICES set
     cd "$service_dir"
     source venv/bin/activate
-    # Export BEFORE nohup to ensure it's inherited
     export CUDA_VISIBLE_DEVICES=$gpu
     nohup uvicorn app:app --host 0.0.0.0 --port $port > "../../logs/$service.log" 2>&1 &
     echo $! > "../../$pid_file"
@@ -181,13 +180,13 @@ echo ""
 echo "Starting services..."
 echo ""
 
-# 1. Start Orpheus TTS (required by Meditron)
+# 1. Start Orpheus TTS
 start_service "modelOrpheus" 5005
 
-# 2. Start Bark TTS (alternative TTS)
+# 2. Start Bark TTS
 start_service "modelBark" 5008
 
-# 3. Start CSM TTS (conversational speech model)
+# 3. Start CSM TTS
 start_service "modelCSM" 5010
 
 # 4. Start Whisper ASR
@@ -196,7 +195,7 @@ start_service "modelWhisper" 5007
 # Give TTS and ASR a moment to initialize
 sleep 3
 
-# 5. Start MultiMeditron (multimodal AI)
+# 5. Start MultiMeditron
 start_service "modelMultiMeditron" 5009
 
 # Give AI models time to load
@@ -208,6 +207,9 @@ start_service "webui" 8080
 # 7. Start Streamlit UI
 start_streamlit "webui" 8503
 
+# 8. Start Qwen3-Omni model service
+start_service "modelQwen3Omni" 5014
+
 echo ""
 echo "=========================================="
 echo "All services started! "
@@ -218,8 +220,9 @@ echo "  - FastAPI Web Interface: http://localhost:8080"
 echo "  - MultiMeditron AI (multimodal): http://localhost:5009"
 echo "  - Orpheus TTS: http://localhost:5005"
 echo "  - Bark TTS: http://localhost:5008"
-echo "  - CSM TTS (conversational): http://localhost:5010"
+echo "  - CSM TTS: http://localhost:5010"
 echo "  - Whisper ASR: http://localhost:5007"
+echo "  - Qwen3-Omni AI: http://localhost:5014"
 echo ""
 echo "Logs are available in the logs/ directory"
 echo ""
@@ -230,6 +233,7 @@ echo "  tail -f logs/modelOrpheus.log"
 echo "  tail -f logs/modelBark.log"
 echo "  tail -f logs/modelCSM.log"
 echo "  tail -f logs/modelWhisper.log"
+echo "  tail -f logs/modelQwen3Omni.log"
 echo ""
 echo "To stop all services:"
 echo "  ./scripts/stop-local.sh"

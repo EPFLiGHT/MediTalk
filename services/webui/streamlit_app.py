@@ -3,6 +3,7 @@ import requests
 import os
 from datetime import datetime
 
+
 # Page configuration - Force light theme
 st.set_page_config(
     page_title="Meditalk",
@@ -78,7 +79,6 @@ st.markdown("""
         box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4) !important;
     }
     
-    /* Ensure button text and icons are white */
     .stButton button p, .stButton button span, .stButton button div {
         color: white !important;
     }
@@ -103,7 +103,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5) !important;
     }
     
-    /* Secondary button (form submit) */
     .stButton button[kind="primary"] {
         background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
     }
@@ -112,7 +111,6 @@ st.markdown("""
         box-shadow: 0 8px 20px rgba(72, 187, 120, 0.4) !important;
     }
     
-    /* User message - vibrant purple gradient */
     .user-message {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -122,7 +120,6 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
     }
     
-    /* Assistant message - clean white with border */
     .assistant-message {
         background: white;
         color: #2d3748;
@@ -147,7 +144,6 @@ st.markdown("""
         font-size: 15px;
     }
     
-    /* Checkbox and select boxes */
     .stCheckbox, .stSelectbox {
         color: #2d3748 !important;
     }
@@ -158,7 +154,6 @@ st.markdown("""
         border-radius: 10px !important;
     }
     
-    /* File uploader */
     [data-testid="stFileUploader"] {
         background-color: white !important;
         border: 2px dashed #cbd5e0 !important;
@@ -170,14 +165,12 @@ st.markdown("""
         border-color: #667eea !important;
     }
     
-    /* Divider */
     hr {
         margin: 2rem 0;
         border: none;
         border-top: 2px solid #e2e8f0;
     }
     
-    /* Expander */
     .streamlit-expanderHeader {
         background-color: white !important;
         border-radius: 10px !important;
@@ -185,23 +178,19 @@ st.markdown("""
         border: 1px solid #e2e8f0 !important;
     }
     
-    /* Caption text */
     .caption {
         color: #718096 !important;
     }
     
-    /* Audio player */
     audio {
         width: 100%;
         margin-top: 1rem;
     }
     
-    /* Info/Success/Error boxes */
     .stAlert {
         border-radius: 10px !important;
     }
     
-    /* Chat input styling */
     [data-testid="stChatInput"] {
         background-color: white !important;
         border: 2px solid #cbd5e0 !important;
@@ -229,7 +218,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5) !important;
     }
     
-    /* Custom send button styling */
     .send-button-wrapper {
         position: relative;
     }
@@ -262,19 +250,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
 # Service URLs
 MULTIMEDITRON_URL = os.getenv("MULTIMEDITRON_URL", "http://localhost:5009")
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
 CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
 WHISPER_URL = os.getenv("WHISPER_URL", "http://localhost:5007")
+QWEN3OMNI_URL = os.getenv("QWEN3OMNI_URL", "http://localhost:5014")
+
 
 # Helper function to load SVG icons
 def load_icon(icon_name, width=20, height=20, color="#667eea"):
     try:
         with open(f"assets/{icon_name}.svg", "r") as f:
             svg = f.read()
-            # Replace currentColor with the specified color
             svg = svg.replace('stroke="currentColor"', f'stroke="{color}"')
             svg = svg.replace('width="24"', f'width="{width}"')
             svg = svg.replace('height="24"', f'height="{height}"')
@@ -282,11 +272,13 @@ def load_icon(icon_name, width=20, height=20, color="#667eea"):
     except:
         return ""
 
+
 # Initialize session state
 if 'conversation_history' not in st.session_state:
     st.session_state.conversation_history = []
 if 'voices' not in st.session_state:
     st.session_state.voices = {}
+
 
 # Sidebar - Settings
 with st.sidebar:
@@ -302,18 +294,27 @@ with st.sidebar:
 
     # Settings
     settings_icon = load_icon("settings", 24, 24, "#667eea")
-    st.markdown(f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">{settings_icon}<h2 style="margin: 0;">Settings</h2></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">'
+        f'{settings_icon}<h2 style="margin: 0;">Settings</h2></div>',
+        unsafe_allow_html=True
+    )
     
     # AI Model Selection
     brain_icon = load_icon("brain", 18, 18, "#667eea")
-    st.markdown(f'<div style="display: flex; align-items: center; gap: 8px;"><span>{brain_icon}</span><span style="font-weight: 600; color: #2d3748;">Meditron Model</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display: flex; align-items: center; gap: 8px;">'
+        f'<span>{brain_icon}</span>'
+        f'<span style="font-weight: 600; color: #2d3748;">Meditron Model</span></div>',
+        unsafe_allow_html=True
+    )
     ai_model = st.selectbox(
         "Select Meditron Model",
         ["multimeditron"],
         format_func=lambda x: "MultiMeditron" if x == "multimeditron" else "none",
         label_visibility="collapsed",
-        width= 180
-    ) # ai_model no used anymore but kept for future use
+        width=180
+    )
 
     # Advanced Settings
     with st.expander("Advanced Settings"):
@@ -339,25 +340,33 @@ with st.sidebar:
     
     # Audio Settings
     volume_icon = load_icon("volume", 18, 18, "#667eea")
-    st.markdown(f'<div style="display: flex; align-items: center; gap: 8px;"><span>{volume_icon}</span><span style="font-weight: 600; color: #2d3748;">Audio Settings</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display: flex; align-items: center; gap: 8px;">'
+        f'<span>{volume_icon}</span>'
+        f'<span style="font-weight: 600; color: #2d3748;">Audio Settings</span></div>',
+        unsafe_allow_html=True
+    )
     generate_audio = st.checkbox("Generate Audio Response", value=True)
     
     if generate_audio:
         tts_service = st.selectbox(
             "TTS Service",
-            ["orpheus", "bark", "csm"],
-            format_func=lambda x: "Orpheus TTS" if x == "orpheus" else ("Bark TTS" if x == "bark" else "CSM (from Sesame)")
+            ["orpheus", "bark", "csm", "qwen3omni"],
+            format_func=lambda x: (
+                "Orpheus TTS" if x == "orpheus"
+                else "Bark TTS" if x == "bark"
+                else "CSM (from Sesame)" if x == "csm"
+                else "Qwen3-Omni (TTS mode)"
+            )
         )
         
         if tts_service == "orpheus":
-            # Check if language was auto-switched by voice input
             if 'auto_switched_language' in st.session_state and st.session_state.auto_switched_language:
                 default_lang = st.session_state.get('detected_language', 'en')
-                st.session_state.auto_switched_language = False  # Reset flag
+                st.session_state.auto_switched_language = False
             else:
                 default_lang = None
             
-            # Language selection for Orpheus
             language = st.selectbox(
                 "Language",
                 ["en", "fr"],
@@ -368,22 +377,19 @@ with st.sidebar:
             
             if "generate_in_parallel" not in st.session_state:
                 st.session_state.generate_in_parallel = False
-
             generate_in_parallel = st.checkbox(
                 "⚡ Multi-GPU Parallel Mode",
                 key="generate_in_parallel",
                 help="Generate audio in parallel across multiple GPUs for faster synthesis"
             )
-            
+        
         elif tts_service == "bark":
-            # Check if language was auto-switched by voice input
             if 'auto_switched_language' in st.session_state and st.session_state.auto_switched_language:
                 default_lang = st.session_state.get('detected_language', 'en')
-                st.session_state.auto_switched_language = False  # Reset flag
+                st.session_state.auto_switched_language = False
             else:
                 default_lang = None
             
-            # Language selection for Bark
             language = st.selectbox(
                 "Language",
                 ["en", "fr"],
@@ -392,21 +398,34 @@ with st.sidebar:
                 help="Select the language for Bark TTS (auto-switches based on detected voice language)"
             )
             generate_in_parallel = False
+
+        elif tts_service == "qwen3omni":
+            language = st.selectbox(
+                "Language",
+                ["en"],
+                index=0,
+                format_func=lambda x: "English",
+            )
+            generate_in_parallel = False
+
         else:
             generate_in_parallel = False
-            language = "en"  # Default language for other services
+            language = "en"
         
-        # CSM doesn't use pre-defined voices (it's context-based)
+        # CSM uses speaker IDs; Qwen3-Omni uses named speakers; others use voice IDs
         if tts_service == "csm":
-            voice = '0'  # Store speaker ID as string for compatibility
+            voice = "0"
+        elif tts_service == "qwen3omni":
+            voice = st.selectbox(
+                "Qwen3-Omni Speaker",
+                ["Ethan", "Chelsie", "Aiden"],
+                index=0
+            )
         else:
-            # Load voices if not already loaded for Orpheus and Bark
-            # For Bark, we need to reload if language changes
             cache_key = f"{tts_service}_{language if tts_service == 'bark' else ''}"
             
             if cache_key not in st.session_state.voices:
                 try:
-                    # Determine URL based on service
                     if tts_service == "orpheus":
                         voice_url = f"{ORPHEUS_URL}/voices"
                     else:
@@ -416,32 +435,28 @@ with st.sidebar:
                     if response.status_code == 200:
                         data = response.json()
                         if tts_service == "orpheus":
-                            # Orpheus returns a flat list of voice objects
                             st.session_state.voices[cache_key] = {
-                                v['id']: f"{v['name']} ({v['gender']})" 
+                                v['id']: f"{v['name']} ({v['gender']})"
                                 for v in data.get('voices', [])
                             }
                         elif tts_service == "bark":
-                            # Bark returns nested dict with language keys
                             lang_key = 'french' if language == 'fr' else 'english'
                             bark_voices = data.get('voices', {}).get(lang_key, [])
                             st.session_state.voices[cache_key] = {
-                                v: v.replace('v2/', '').replace('_', ' ').title() for v in bark_voices
+                                v: v.replace('v2/', '').replace('_', ' ').title()
+                                for v in bark_voices
                             }
                     else:
-                        # Fallback on error
                         if tts_service == "orpheus":
                             st.session_state.voices[cache_key] = {"tara": "Tara (female)"}
                         else:
                             st.session_state.voices[cache_key] = {"v2/en_speaker_6": "En Speaker 6"}
-                except Exception as e:
-                    # Fallback on exception
+                except Exception:
                     if tts_service == "orpheus":
                         st.session_state.voices[cache_key] = {"tara": "Tara (female)"}
                     else:
                         st.session_state.voices[cache_key] = {"v2/en_speaker_6": "En Speaker 6"}
             
-            # Get voices from cache with appropriate fallback
             if tts_service == "orpheus":
                 voices = st.session_state.voices.get(cache_key, {"tara": "Tara (female)"})
             else:
@@ -461,7 +476,12 @@ with st.sidebar:
     
     # Voice Input Settings
     mic_icon = load_icon("microphone", 18, 18, "#667eea")
-    st.markdown(f'<div style="display: flex; align-items: center; gap: 8px; margin-top: 1rem;"><span>{mic_icon}</span><span style="font-weight: 600; color: #2d3748;">Voice Input</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display: flex; align-items: center; gap: 8px; margin-top: 1rem;">'
+        f'<span>{mic_icon}</span>'
+        f'<span style="font-weight: 600; color: #2d3748;">Voice Input</span></div>',
+        unsafe_allow_html=True
+    )
 
     # Whisper language selection
     whisper_language = st.selectbox(
@@ -475,34 +495,28 @@ with st.sidebar:
     audio_bytes = st.audio_input("Click the mic to record your question")
     
     if audio_bytes:
-        # Create a hash of the audio to track if already processed it
         import hashlib
-        # Read the bytes for hashing
         audio_bytes.seek(0)
         audio_data = audio_bytes.read()
         audio_hash = hashlib.md5(audio_data).hexdigest()
-        audio_bytes.seek(0)  # Reset for later use
+        audio_bytes.seek(0)
         
-        # Initialize last_processed_audio in session state if not exists
         if 'last_processed_audio' not in st.session_state:
             st.session_state.last_processed_audio = None
         
-        # Only process if this is a new recording
         if st.session_state.last_processed_audio != audio_hash:
             st.session_state.last_processed_audio = audio_hash
             
             with st.spinner("Transcribing your voice..."):
                 try:
-                    # Reset the audio bytes for reading
                     audio_bytes.seek(0)
                     audio_data_for_whisper = audio_bytes.read()
                     
-                    # Send audio to Whisper for transcription with language parameter
                     files = {'audio_file': ('recording.wav', audio_data_for_whisper, 'audio/wav')}
                     data_payload = {'language': whisper_language}
                     response = requests.post(
-                        f"{WHISPER_URL}/transcribe", 
-                        files=files, 
+                        f"{WHISPER_URL}/transcribe",
+                        files=files,
                         data=data_payload,
                         timeout=60
                     )
@@ -513,52 +527,43 @@ with st.sidebar:
                         detected_lang = data.get('detected_language', 'unknown')
                         st.session_state.transcribed_text = transcribed_text
                         
-                        # Validate detected language (only accept English or French)
                         if detected_lang not in ['en', 'fr', 'english', 'french']:
                             st.error(f"❌ Language not supported: {detected_lang.upper()}")
                             st.error("Please try again in **English** or **French** only.")
-                            st.session_state.last_processed_audio = None  # Allow retry
-                            # Don't add to conversation history - just show error and continue
-                            # This prevents the chat history from disappearing
+                            st.session_state.last_processed_audio = None
                         else:
-                            # Only process if language is valid
-                            # Normalize language code
                             normalized_lang = 'en' if detected_lang in ['en', 'english'] else 'fr'
-                            
-                            # Store detected language and set flag for auto-switching
                             st.session_state.detected_language = normalized_lang
                             st.session_state.auto_switched_language = True
                             
-                            # Show detected language
                             lang_display = "English" if normalized_lang == "en" else "French"
                             st.success(f"✓ Detected: {lang_display}")
                             
-                            # Show auto-switch message if TTS is enabled with Orpheus or Bark
                             if tts_service in ["orpheus", "bark"] and generate_audio:
                                 st.info(f"TTS will use {lang_display}")
                             
-                            # Upload audio to CSM for context (if CSM is selected)
                             audio_url = None
                             if tts_service == "csm":
                                 try:
-                                    # Upload the user's voice to CSM context
                                     files_csm = {'audio_file': ('user_recording.wav', audio_data_for_whisper, 'audio/wav')}
-                                    csm_response = requests.post(f"{CSM_URL}/upload_context_audio", files=files_csm, timeout=30)
+                                    csm_response = requests.post(
+                                        f"{CSM_URL}/upload_context_audio",
+                                        files=files_csm,
+                                        timeout=30
+                                    )
                                     
                                     if csm_response.status_code == 200:
                                         csm_data = csm_response.json()
                                         audio_url = csm_data.get('relative_path')
-                                        st.success(f"✓ Voice recorded for context")
+                                        st.success("✓ Voice recorded for context")
                                 except Exception as e:
                                     st.warning(f"Could not upload voice for context: {str(e)}")
                             
-                            # Auto-submit the transcribed text with audio URL
                             user_message = {
                                 "role": "user",
                                 "content": transcribed_text
                             }
                             
-                            # Add audio URL if available
                             if audio_url:
                                 user_message["audio_url"] = audio_url
                             
@@ -571,6 +576,7 @@ with st.sidebar:
                     st.error(f"Error: {str(e)}")
                     import traceback
                     st.error(traceback.format_exc())
+
 
 # Main content area
 st.title("MediTalk")
@@ -595,12 +601,13 @@ if len(st.session_state.conversation_history) > 0:
                 </div>
             """, unsafe_allow_html=True)
             
-            # Show audio player if available
             if 'audio_url' in msg and msg['audio_url']:
                 with st.expander("Listen to response"):
-                    # Show warning if context was skipped
                     if msg.get('context_skipped', False):
-                        st.warning("Audio was generated without conversation context due to length constraints. The voice may sound less natural.")
+                        st.warning(
+                            "Audio was generated without conversation context due to length constraints. "
+                            "The voice may sound less natural."
+                        )
                     
                     audio_url = msg['audio_url']
                     if not audio_url.startswith('http'):
@@ -612,6 +619,7 @@ if len(st.session_state.conversation_history) > 0:
                         st.error(f"Could not load audio: {e}")
     
     st.markdown("---")
+
 
 # Pre-fill with transcribed text if available
 default_text = st.session_state.get('transcribed_text', '')
@@ -627,31 +635,28 @@ question = st.chat_input(
 
 # Handle chat input submission
 if question and question.strip():
-    # Add user message to history immediately
     st.session_state.conversation_history.append({
         "role": "user",
         "content": question
     })
     st.rerun()
 
-# Check if MediTalk needs to generate a response (last message is from user and no processing flag)
-if (len(st.session_state.conversation_history) > 0 and 
+# Check if need to generate a response
+if (
+    len(st.session_state.conversation_history) > 0 and
     st.session_state.conversation_history[-1]['role'] == 'user' and
-    not st.session_state.get('processing', False)):
-    
+    not st.session_state.get('processing', False)
+):
     st.session_state.processing = True
     last_question = st.session_state.conversation_history[-1]['content']
     
-    # Generate response with or without audio
     with st.spinner("Thinking... This may take a few minutes..."):
         try:
             endpoint = f"{MULTIMEDITRON_URL}/ask"
             
-            # Use detected language if available, otherwise use selected language
             tts_language = language
             if 'detected_language' in st.session_state and tts_service in ["orpheus", "bark"]:
                 tts_language = st.session_state.detected_language
-                # Clear the detected language after use
                 del st.session_state.detected_language
             
             payload = {
@@ -666,13 +671,11 @@ if (len(st.session_state.conversation_history) > 0 and
                 "generate_in_parallel": generate_in_parallel if tts_service == "orpheus" else False
             }
             
-            # Make request
             response = requests.post(endpoint, json=payload, timeout=600)
             
             if response.status_code == 200:
                 data = response.json()
                 
-                # Add assistant response to history
                 assistant_msg = {
                     "role": "assistant",
                     "content": data.get("answer", "")
@@ -680,7 +683,6 @@ if (len(st.session_state.conversation_history) > 0 and
                 
                 if generate_audio and data.get("audio_url"):
                     assistant_msg["audio_url"] = data["audio_url"]
-                    # Include context_skipped flag if present (for CSM warnings)
                     if data.get("context_skipped"):
                         assistant_msg["context_skipped"] = True
                 
@@ -689,7 +691,7 @@ if (len(st.session_state.conversation_history) > 0 and
                 st.rerun()
             else:
                 st.error(f"Error: {response.status_code} - {response.text}")
-                st.session_state.conversation_history.pop()  # Remove user message on error
+                st.session_state.conversation_history.pop()
                 st.session_state.processing = False
                 
         except requests.exceptions.Timeout:
@@ -702,4 +704,3 @@ if (len(st.session_state.conversation_history) > 0 and
             if st.session_state.conversation_history:
                 st.session_state.conversation_history.pop()
             st.session_state.processing = False
-

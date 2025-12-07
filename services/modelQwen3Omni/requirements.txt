@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+transformers
+torch
+torchaudio
+torchvision
+librosa
+pydantic
+tqdm
+qwen-omni-utils
+accelerate
+torchcodec

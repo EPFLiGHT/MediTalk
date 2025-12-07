@@ -351,7 +351,7 @@ class OrpheusTTS:
             # Step 2: Split text into chunks
             t0 = time.time()
             logger.info(f"Synthesizing text (length={len(text)} chars) with voice '{voice}'")
-            chunks = self._chunk_text(text, max_chars=150)
+            chunks = self._chunk_text(text, max_chars=200)
             num_chunks = len(chunks)
             logger.info(f"Text split into {num_chunks} chunks")
             timings['text_chunking'] = time.time() - t0

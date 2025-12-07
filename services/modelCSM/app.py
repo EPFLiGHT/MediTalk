@@ -81,7 +81,7 @@ def split_text_for_csm(text: str, max_chars: int = 200) -> list:
 async def startup_event():
     global csm_generator
     try:
-        logger.info("Initializing CSM (Conversational Speech Model)...")
+        logger.info("\nInitializing CSM (Conversational Speech Model from Sesame)...")
         
         # Check for HF token
         hf_token = os.getenv('HUGGINGFACE_TOKEN')

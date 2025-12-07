@@ -28,7 +28,6 @@ app = FastAPI(title="MultiMeditron Multimodal Medical AI Service", version="1.0.
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
 CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
-QWEN3OMNI_URL = os.getenv("QWEN3OMNI_URL", "http://localhost:5014")
 
 
 # Create output directory for text responses
@@ -48,27 +47,49 @@ image_loader = None
 ATTACHMENT_TOKEN = "<|reserved_special_token_0|>"
 attachment_token_idx = None
 
-# Global conversation instance
-current_conversation = None  # should and will be initialized as JsonConversationBuilder
+# Global conversation tracker
+current_conversation = JsonConversationBuilder()
+
+def clean_text_for_tts(text: str) -> str:
+    """
+    Remove markdown formatting from text before sending to TTS.
+    This prevents TTS from reading "asterisk" or other markup symbols.
+    """
+    # Remove bold/italic markers: **text**, __text__, *text*, _text_
+    text = re.sub(r'\*\*([^\*]+)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'__([^_]+)__', r'\1', text)        # __bold__
+    text = re.sub(r'\*([^\*]+)\*', r'\1', text)       # *italic*
+    text = re.sub(r'_([^_]+)_', r'\1', text)          # _italic_
+    
+    # Remove markdown headers: # Header, ## Header, etc.
+    text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
+    
+    # Remove markdown list markers: - item, * item, 1. item
+    text = re.sub(r'^\s*[-\*]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    
+    # Remove inline code markers: `code`
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    
+    # Remove links: [text](url) -> text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    
+    return text.strip()
 
 # New Data models for conversation history
 class AudioContent(BaseModel):
     type: Literal["audio"]
     audio: str  # file path
 
-
 class TextContent(BaseModel):
     type: Literal["text"]
-    text: str  # text content
-
+    text: str
 
 ContentItem = Union[AudioContent, TextContent]
-
 
 class ConversationMyMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: List[ContentItem] = Field(discriminator='type')
-
 
 class JsonConversationBuilder(BaseModel):
     conversation: List[ConversationMyMessage] = []
@@ -84,72 +105,28 @@ class JsonConversationBuilder(BaseModel):
         
         message = ConversationMyMessage(role=role, content=content_items)
         self.conversation.append(message)
-
-    def add_audio_to_last_assistant(self, audio_path: str) -> None:
-        """
-        Attach an audio content item to the last assistant message, if any.
-        """
-        if not self.conversation:
-            logger.warning("No conversation turns available to attach audio.")
-            return
-
-        # Find last assistant message by walking backwards
-        for msg in reversed(self.conversation):
-            if msg.role == "assistant":
-                msg.content.insert(0, AudioContent(type="audio", audio=audio_path))
-                return
-        
-        logger.warning("No assistant turn found to attach audio.")
     
     def to_dict(self) -> dict:
         """Export conversation to dictionary format."""
         return {"conversation": [msg.model_dump() for msg in self.conversation]}
     
     def to_json(self, filepath: str) -> None:
-        """Save conversation to JSON file with proper error handling."""
-        try:
-            # Write to temporary file first for atomic operation
-            temp_path = filepath + ".tmp"
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-            
-            # Atomic rename operation
-            os.replace(temp_path, filepath)
-            logger.info(f"Conversation saved to {filepath}")
-        except Exception as e:
-            logger.error(f"Failed to save conversation to {filepath}: {e}")
-            # Clean up temp file if it exists
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except:
-                    pass
-            raise
+        """Save conversation to JSON file."""
+        with open(filepath, 'w') as f:
+            json.dump(self.to_dict(), f, indent=2)
     
     @classmethod
     def from_json(cls, filepath: str) -> "JsonConversationBuilder":
-        """Load conversation from JSON file with error handling."""
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            return cls(conversation=[ConversationMyMessage(**msg) for msg in data["conversation"]])
-        except FileNotFoundError:
-            logger.warning(f"Conversation file not found: {filepath}")
-            return cls()  # Return empty conversation
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in conversation file {filepath}: {e}")
-            return cls()  # Return empty conversation
-        except Exception as e:
-            logger.error(f"Error loading conversation from {filepath}: {e}")
-            return cls()  # Return empty conversation
-
+        """Load conversation from JSON file."""
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        return cls(conversation=[ConversationMyMessage(**msg) for msg in data["conversation"]])
 
 # Old data model for compatibility
 class ConversationMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
     audio_url: Optional[str] = None  # Optional audio URL for CSM context
-
 
 # Other non-specific data models
 class QuestionRequest(BaseModel):
@@ -158,50 +135,21 @@ class QuestionRequest(BaseModel):
     temperature: float = 0.7
     generate_audio: bool = True
     voice: str = "tara"
-    tts_service: str = "orpheus"  # "orpheus", "bark", "csm", or "qwen3omni"
-    language: str = "en"
-    conversation_history: List[ConversationMessage] = []
-    generate_in_parallel: bool = True
+    tts_service: str = "orpheus"  # "orpheus", "bark", or "csm"
+    language: str = "en"  # Language for Orpheus TTS: "en" or "fr"
+    conversation_history: List[ConversationMessage] = []  # For maintaining conversation context
+    generate_in_parallel: bool = True  # For Orpheus TTS parallel processing
 
 class MedicalResponse(BaseModel):
     question: str
     answer: str
     audio_file: Optional[str] = None
     audio_url: Optional[str] = None
-    context_skipped: Optional[bool] = None  # Flag for CSM when context was too long
-
-
-def save_conversation_to_disk(conversation: JsonConversationBuilder) -> None:
-    """
-    Persist conversation history to JSON file with timestamp in filename.
-    File naming format: conversation_{timestamp}.json
-    
-    Args:
-        conversation: JsonConversationBuilder instance to save
-    """
-    try:
-        # Generate timestamp in the required format
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        filename = f"conversation_{timestamp}.json"
-        filepath = CONVERSATION_DIR / filename
-        
-        # Save using the JsonConversationBuilder's to_json method
-        conversation.to_json(str(filepath))
-        
-        logger.info(f"Conversation persisted to {filename}")
-        
-    except Exception as e:
-        logger.error(f"Failed to save conversation to disk: {e}")
-
+    context_skipped: Optional[bool] = None  # Flag when context was too long
 
 @app.on_event("startup")
 async def startup_event():
-    global model, tokenizer, attachment_token_idx, collator, image_loader, current_conversation
-    
-    # Initialize the single global conversation instance
-    current_conversation = JsonConversationBuilder()
-    logger.info("Initialized global conversation instance")
-    
+    global model, tokenizer, attachment_token_idx, collator, image_loader
     try:
         logger.info("Initializing MultiMeditron medical AI...")
         
@@ -216,7 +164,7 @@ async def startup_event():
             logger.warning("Please set MULTIMEDITRON_HF_TOKEN in .env file")
             return
         
-        # From here: the code follows the official documentation: https://epflight.github.io/MultiMeditron/guides/quickstart.html
+        # Following the official documentation: https://epflight.github.io/MultiMeditron/guides/quickstart.html
         logger.info(f"Loading tokenizer from base LLM...")
         
         # Load tokenizer
@@ -234,24 +182,25 @@ async def startup_event():
         attachment_token_idx = tokenizer.convert_tokens_to_ids(ATTACHMENT_TOKEN)
         logger.info(f"Attachment token '{ATTACHMENT_TOKEN}' index: {attachment_token_idx}")
         
-        # Load MultiMeditron model
+        # Load MultiMeditron model (following official docs)
         logger.info(f"Loading MultiMeditron model from {model_path}...")
         from multimeditron.model.model import MultiModalModelForCausalLM
         from multimeditron.dataset.loader import FileSystemImageLoader
         from multimeditron.model.data_loader import DataCollatorForMultimodal
         
+        # Use device_map="auto" as shown in official docs
         model = MultiModalModelForCausalLM.from_pretrained(
             model_path, 
             device_map="auto",
             token=hf_token
         )
-        model.eval()  # Set to evaluation mode
+        model.eval()  # Set to evaluation mode (from official docs)
         logger.info(f"Model loaded with device_map='auto'")
         
-        # Setup image loader
+        # Setup image loader (from official docs - note: FileSystemImageLoader not FileSystemImageRegistry)
         image_loader = FileSystemImageLoader(base_path=os.getcwd())
         
-        # Setup collator
+        # Setup collator (following official docs)
         collator = DataCollatorForMultimodal(
             tokenizer=tokenizer,
             tokenizer_type="llama",
@@ -273,7 +222,6 @@ async def startup_event():
         import traceback
         traceback.print_exc()
 
-
 @app.get("/health")
 def health_check():
     if model is not None and tokenizer is not None and collator is not None:
@@ -293,24 +241,24 @@ def health_check():
         "conversation_turns": len(current_conversation.conversation) if current_conversation else 0
     }
 
-
 @app.post("/ask", response_model=MedicalResponse)
 async def ask_question(request: QuestionRequest):
     """
     Text-only medical question endpoint (compatible with existing Meditron API)
     """
     try:
-        global current_conversation
-        
         if not model or not tokenizer or not collator:
-            raise HTTPException(status_code=503, detail="MultiMeditron model is not loaded")
+            # Fallback mode
+            logger.warning("Model not fully loaded, using fallback response")
+            answer = generate_fallback_response(request.question)
+            return MedicalResponse(question=request.question, answer=answer)
         
         logger.info("Generating text response...")
         
-        # 1) Generate answer
+        # Generate answer using MultiMeditron (text-only, no modalities)
         answer = generate_multimeditron_response(
             question=request.question,
-            modalities=[],
+            modalities=[],  # No images for text-only
             temperature=request.temperature,
             max_length=request.max_length,
             conversation_history=request.conversation_history
@@ -318,10 +266,10 @@ async def ask_question(request: QuestionRequest):
         
         response_data = {
             "question": request.question,
-            "answer": answer
+            "answer": answer,
         }
         
-        # Debug text file
+        # Save text response for debugging
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             text_filename = f"response_{timestamp}.txt"
@@ -336,12 +284,7 @@ async def ask_question(request: QuestionRequest):
         except Exception as e:
             logger.warning(f"Failed to save text response: {e}")
         
-        # 2) Add user + assistant TEXT turns, then persist once
-        current_conversation.add_turn(role="user", text=request.question, audio_path=None)
-        current_conversation.add_turn(role="assistant", text=answer, audio_path=None)
-        save_conversation_to_disk(current_conversation)
-        
-        # 3) If audio requested, generate it, then update last assistant turn and persist again
+        # Generate audio if requested
         if request.generate_audio:
             try:
                 logger.info(f"Generating audio with {request.tts_service}...")
@@ -354,14 +297,9 @@ async def ask_question(request: QuestionRequest):
                     generate_in_parallel=request.generate_in_parallel
                 )
                 if audio_result:
-                    filename = audio_result.get("filename")
-                    response_data["audio_file"] = filename
+                    response_data["audio_file"] = audio_result.get("filename")
                     response_data["audio_url"] = audio_result.get("url")
-                    
-                    # Update last assistant turn with audio and save again
-                    current_conversation.add_audio_to_last_assistant(audio_path=filename)
-                    save_conversation_to_disk(current_conversation)
-                    
+                    # Include context_skipped flag if present (for CSM)
                     if "context_skipped" in audio_result:
                         response_data["context_skipped"] = audio_result["context_skipped"]
             except Exception as e:
@@ -369,14 +307,12 @@ async def ask_question(request: QuestionRequest):
         
         logger.info("Request completed successfully")
         return MedicalResponse(**response_data)
-
         
     except Exception as e:
         logger.error(f"Error processing question: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 def generate_multimeditron_response(
     question: str, 
@@ -438,6 +374,16 @@ def generate_multimeditron_response(
     
     return response_text
 
+def generate_fallback_response(question: str) -> str:
+    """
+    Fallback response when model is not loaded yet
+    """
+    return (
+        f"[MultiMeditron Fallback Mode] "
+        f"This is a placeholder response. The MultiMeditron model is being integrated. "
+        f"Your question was: '{question}'. "
+        f"Once the full model is loaded, you'll get real medical AI responses with multimodal support."
+    )
 
 def generate_audio(text: str, voice: str, tts_service: str = "orpheus", language: str = "en", conversation_history: List[ConversationMessage] = [], generate_in_parallel: bool = True) -> Optional[Dict]:
     """
@@ -449,62 +395,10 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", language
     Returns:
         {"filename": str, "url": str}
     """
-    global current_conversation
-
     try:
         # Clean markdown formatting from text before TTS
         clean_text = clean_text_for_tts(text)
         logger.info(f"Cleaned {len(text) - len(clean_text)} characters of markdown formatting for TTS")
-
-        # Handle Qwen3-Omni TTS (requires full conversation context):
-        if tts_service == "qwen3omni":
-            logger.info("Generating audio with Qwen3-Omni TTS...")
-
-            # 1) Persist current_conversation to a JSON file for Qwen3-Omni
-            #    so it can reconstruct the full multi-turn context.
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-            conv_filename = f"qwen3omni_conv_{timestamp}.json"
-            conv_path = CONVERSATION_DIR / conv_filename
-
-            try:
-                current_conversation.to_json(str(conv_path))
-            except Exception as e:
-                logger.error(f"Failed to save conversation for Qwen3-Omni: {e}")
-                raise
-
-            # 2) Call Qwen3-Omni service with that JSON filename
-            payload = {
-                "conversation_json_file": conv_filename,
-                "speaker": voice if voice else "Ethan"
-            }
-
-            response = requests.post(
-                f"{QWEN3OMNI_URL}/synthesize",
-                json=payload,
-                timeout=1800
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                audio_file = result.get("audio_file")
-                if not audio_file:
-                    logger.warning("Qwen3-Omni response did not contain 'audio_file'")
-                    return None
-
-                logger.info(f"Audio generated successfully with Qwen3-Omni: {audio_file}")
-
-                return {
-                    "filename": audio_file,
-                    "url": f"http://localhost:8080/audio/{os.path.basename(audio_file)}"
-                }
-            elif response.status_code == 499:
-                logger.info("TTS generation was cancelled on Qwen3-Omni service")
-                raise Exception("Task cancelled by user")
-            else:
-                logger.warning(
-                    f"Audio generation failed with Qwen3-Omni: {response.status_code} {response.text}"
-                )
-                return None
         
         # Handle CSM (Conversational Speech Model) - requires conversation context
         if tts_service == "csm":
@@ -535,7 +429,7 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", language
                 "text": clean_text,
                 "speaker": speaker_id,
                 "conversation_history": context_segments,
-                "max_audio_length_ms": 10000  # Per chunk (CSM uses chunking)
+                "max_audio_length_ms": 10000  # Per chunk - CSM now uses chunking
             }
             
             response = requests.post(
@@ -608,33 +502,6 @@ def generate_audio(text: str, voice: str, tts_service: str = "orpheus", language
         if "Task cancelled" in str(e):
             raise
         return None
-
-def clean_text_for_tts(text: str) -> str:
-    """
-    Remove markdown formatting from text before sending to TTS.
-    This prevents TTS from reading "asterisk" or other markup symbols.
-    """
-    # Remove bold/italic markers: **text**, __text__, *text*, _text_
-    text = re.sub(r'\*\*([^\*]+)\*\*', r'\1', text)  # **bold**
-    text = re.sub(r'__([^_]+)__', r'\1', text)        # __bold__
-    text = re.sub(r'\*([^\*]+)\*', r'\1', text)       # *italic*
-    text = re.sub(r'_([^_]+)_', r'\1', text)          # _italic_
-    
-    # Remove markdown headers: # Header, ## Header, etc.
-    text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
-    
-    # Remove markdown list markers: - item, * item, 1. item
-    text = re.sub(r'^\s*[-\*]\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
-    
-    # Remove inline code markers: `code`
-    text = re.sub(r'`([^`]+)`', r'\1', text)
-    
-    # Remove links: [text](url) -> text
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
-    
-    return text.strip()
-
 
 if __name__ == "__main__":
     import uvicorn
