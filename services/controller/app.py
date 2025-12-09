@@ -1,38 +1,15 @@
-"""
-Controller Service - Orchestrates model services and manages conversations.
-
-Philosophy:
-- Thin orchestration layer - no business logic
-- Services are autonomous - controller just coordinates
-- Stateful (conversation storage) but horizontally scalable
-- Configuration-driven service discovery
-
-Architecture:
-    Streamlit → Controller → [MultiMeditron, Whisper, Orpheus, ...]
-                    ↓
-              [Conversation
-                 Storage]
-
-Endpoints:
-- POST /chat              - Full conversation pipeline
-- POST /transcribe        - Direct STT
-- POST /synthesize        - Direct TTS
-- GET  /conversations     - List conversations
-- GET  /conversations/{id} - Get specific conversation
-- DELETE /conversations/{id} - Delete conversation
-- GET  /health            - System health check
-"""
-
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
-from .conversation_manager import ConversationManager
-from .models import (
+from conversation_manager import ConversationManager
+from data_models import (
     ChatRequest,
     ChatResponse,
     Conversation,
@@ -47,7 +24,7 @@ from .models import (
     TranscribeRequest,
     TranscribeResponse,
 )
-from .service_clients import ServiceRegistry, call_llm, call_stt, call_tts
+from service_clients import ServiceRegistry, call_multimeditron, call_stt, call_tts
 
 # Configure logging
 logging.basicConfig(
@@ -62,12 +39,12 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 SERVICE_CONFIG = {
-    "multimeditron": os.getenv("MULTIMEDITRON_URL", "http://localhost:5000"),
+    "multimeditron": os.getenv("MULTIMEDITRON_URL", "http://localhost:5009"),
     "whisper": os.getenv("WHISPER_URL", "http://localhost:5007"),
     "orpheus": os.getenv("ORPHEUS_URL", "http://localhost:5005"),
-    "bark": os.getenv("BARK_URL", "http://localhost:5006"),
+    "bark": os.getenv("BARK_URL", "http://localhost:5008"),
     "csm": os.getenv("CSM_URL", "http://localhost:5010"),
-    "qwen3omni": os.getenv("QWEN3OMNI_URL", "http://localhost:5009"),
+    "qwen3omni": os.getenv("QWEN3OMNI_URL", "http://localhost:5014"),
 }
 
 # Conversation storage directory (shared with services)
@@ -81,6 +58,7 @@ VERBOSE = os.getenv("CONTROLLER_VERBOSE", "false").lower() == "true"
 
 # Global service registry and conversation manager
 service_registry: ServiceRegistry = None
+conversation_manager: ConversationManager = None
 conversation_manager: ConversationManager = None
 
 
@@ -107,11 +85,15 @@ async def lifespan(app: FastAPI):
     
     service_registry = ServiceRegistry(SERVICE_CONFIG, verbose=VERBOSE)
     
-    # Check service health
-    health = await service_registry.health_check_all()
-    for name, status in health.items():
-        status_emoji = "✅" if status["status"] == "healthy" else "❌"
-        logger.info(f"{status_emoji} {name}: {status['status']}")
+    # Check service health (non-blocking - don't wait if services are slow)
+    try:
+        health = await service_registry.health_check_all()
+        for name, status in health.items():
+            status_emoji = "✅" if status["status"] == "healthy" else "❌"
+            logger.info(f"{status_emoji} {name}: {status['status']}")
+    except Exception as e:
+        logger.warning(f"Health check failed during startup: {e}")
+        logger.info("Controller will start anyway - services can be checked later via /health endpoint")
     
     logger.info("✅ Controller Service ready!")
     
@@ -137,7 +119,7 @@ app = FastAPI(
 # CORS middleware (for Streamlit frontend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify Streamlit URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -304,6 +286,37 @@ async def synthesize(request: SynthesizeRequest):
         )
 
 
+@app.get("/outputs/{service}/{filename}")
+async def serve_audio_file(service: str, filename: str):
+    """
+    Serve audio files from TTS service output directories.
+    This allows the Streamlit UI to load audio without the FastAPI webui.
+    """
+    logger.info(f"Serving audio file: /outputs/{service}/{filename}")
+    
+    # Get project root (controller is in services/controller)
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    file_path = os.path.join(project_root, "outputs", service, filename)
+    
+    if not os.path.exists(file_path):
+        logger.error(f"Audio file not found: {file_path}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Audio file not found: /outputs/{service}/{filename}"
+        )
+    
+    logger.info(f"Serving file: {file_path}")
+    return FileResponse(
+        file_path,
+        media_type="audio/wav",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=3600"
+        }
+    )
+
+
 # ============================================================================
 # Main Chat Endpoint (Full Pipeline Orchestration)
 # ============================================================================
@@ -339,6 +352,12 @@ async def chat(request: ChatRequest):
     conversation_id = conversation.id
     processing_info = {"services_called": []}
     
+    # Log incoming request
+    logger.info(f"📨 Received /chat request for conversation {conversation_id}")
+    logger.info(f"   - use_llm: {request.use_llm}, llm_service: {request.llm_service}")
+    logger.info(f"   - use_tts: {request.use_tts}, tts_service: {request.tts_service}")
+    logger.info(f"   - use_stt: {request.use_stt}")
+    
     try:
         # Step 2: Process audio input with STT (if present and enabled)
         user_message = request.message
@@ -357,14 +376,15 @@ async def chat(request: ChatRequest):
             if audio_content:
                 whisper_client = service_registry.get("whisper")
                 if whisper_client:
-                    if VERBOSE:
-                        logger.info(f"Transcribing audio from {audio_content.data}")
+                    logger.info(f"🎤 Calling Whisper STT for audio: {audio_content.data}")
                     
                     stt_result = await call_stt(
                         whisper_client,
                         audio_content.data,
                         verbose=VERBOSE
                     )
+                    
+                    logger.info(f"✅ Whisper STT completed: '{stt_result.get('text', '')[:50]}...'")
                     
                     # Add transcribed text to message
                     user_message.content.append(
@@ -391,73 +411,118 @@ async def chat(request: ChatRequest):
                     detail=f"LLM service '{request.llm_service}' not available"
                 )
             
-            if VERBOSE:
-                logger.info(f"Generating response with {request.llm_service}...")
-            
             # Pass conversation JSON file path to service (not the data itself)
             conversation_json_path = conversation_manager.get_conversation_path(conversation_id)
             
-            llm_result = await call_llm(
+            logger.info(f"🤖 Calling {request.llm_service} LLM with conversation: {conversation_json_path}")
+            
+            llm_result = await call_multimeditron(
                 llm_client,
-                conversation_json_path=conversation_json_path,  # Changed: pass file path
+                conversation_json_path=conversation_json_path,
                 verbose=VERBOSE,
                 **(request.context or {})
             )
             
             assistant_text = llm_result.get("response", "")
+            logger.info(f"✅ {request.llm_service} response received: '{assistant_text[:100]}...'")
+            
             processing_info["services_called"].append(request.llm_service)
             processing_info["llm_result"] = llm_result
+            
+            # Immediately create and save assistant message with text only
+            assistant_message_content = [
+                MessageContent(type="text", data=assistant_text)
+            ]
+            
+            assistant_message = ConversationMessage(
+                role=MessageRole.ASSISTANT,
+                content=assistant_message_content,
+                service_metadata={
+                    "llm_service": request.llm_service
+                }
+            )
+            
+            # Save assistant text message to conversation JSON
+            conversation_manager.add_message(conversation_id, assistant_message, verbose=VERBOSE)
+            
+            if VERBOSE:
+                logger.info(f"Saved assistant text message to conversation {conversation_id}")
         
         # Step 4: Synthesize audio response (if enabled)
-        assistant_message_content = [
-            MessageContent(type="text", data=assistant_text)
-        ]
-        
         if request.use_tts and assistant_text:
             tts_client = service_registry.get(request.tts_service)
             if tts_client:
-                if VERBOSE:
-                    logger.info(f"Synthesizing audio with {request.tts_service}...")
+                # Get updated conversation path (with timestamped filename)
+                conversation_json_path = conversation_manager.get_conversation_path(conversation_id)
                 
+                logger.info(f"🔊 Calling {request.tts_service} TTS for text: '{assistant_text[:50]}...'")
+                logger.info(f"   - Conversation path: {conversation_json_path}")
+                logger.info(f"   - Language: {request.tts_language}")
+                logger.info(f"   - Context: {request.context}")
+                
+                # Call TTS with conversation path (TTS extracts last assistant message)
                 tts_result = await call_tts(
                     tts_client,
-                    assistant_text,
+                    target_text=assistant_text,  # For services that need it
+                    conversation_json_path=conversation_json_path,
                     language=request.tts_language,
-                    verbose=VERBOSE
+                    verbose=VERBOSE,
+                    **(request.context or {})
                 )
                 
-                assistant_message_content.append(
-                    MessageContent(
-                        type="audio",
-                        data=tts_result.get("audio_path", ""),
-                        metadata={"source": request.tts_service}
-                    )
-                )
+                filename = tts_result.get("filename", "")
+                service = tts_result.get("service", request.tts_service)
+                logger.info(f"✅ {request.tts_service} TTS completed: {filename}")
+                
                 processing_info["services_called"].append(request.tts_service)
                 processing_info["tts_result"] = tts_result
+                
+                if filename:
+                    # Construct simple URL path
+                    audio_url_path = f"/outputs/{service}/{filename}"
+                    logger.info(f"   Audio URL: {audio_url_path}")
+                    
+                    # Update the existing assistant message with audio
+                    conversation = conversation_manager.get_conversation(conversation_id)
+                    if conversation and conversation.messages:
+                        last_message = conversation.messages[-1]
+                        if last_message.role == MessageRole.ASSISTANT:
+                            # Add audio to existing assistant message (use URL path, not filesystem path)
+                            last_message.content.append(
+                                MessageContent(
+                                    type="audio",
+                                    data=audio_url_path,
+                                    metadata={"source": request.tts_service}
+                                )
+                            )
+                            # Update service metadata
+                            if last_message.service_metadata:
+                                last_message.service_metadata["tts_service"] = request.tts_service
+                            
+                            # Save updated conversation
+                            conversation.updated_at = datetime.utcnow()
+                            conversation_manager._save_to_file(conversation, verbose=VERBOSE)
+                            
+                            logger.info(f"💾 Updated assistant message with audio URL: {audio_url_path}")
+                            
+                            # Update assistant_message for response
+                            assistant_message = last_message
         
-        # Step 5: Create and store assistant message
-        assistant_message = ConversationMessage(
-            role=MessageRole.ASSISTANT,
-            content=assistant_message_content,
-            service_metadata={
-                "llm_service": request.llm_service,
-                "tts_service": request.tts_service if request.use_tts else None
-            }
-        )
+        # Step 5: Return response
+        logger.info(f"✅ Chat completed for conversation {conversation_id}")
+        logger.info(f"   - Services called: {processing_info['services_called']}")
+        logger.info(f"   - Assistant message has {len(assistant_message.content)} content items")
+        for content in assistant_message.content:
+            logger.info(f"     • {content.type}: {str(content.data)[:80]}...")
         
-        conversation_manager.add_message(conversation_id, assistant_message, verbose=VERBOSE)
-        
-        # Step 6: Return response
-        if VERBOSE:
-            logger.info(f"Chat completed for conversation {conversation_id}")
-            logger.info(f"Services called: {processing_info['services_called']}")
-        
-        return ChatResponse(
+        response = ChatResponse(
             conversation_id=conversation_id,
             assistant_message=assistant_message,
             processing_info=processing_info
         )
+        
+        logger.info(f"📤 Sending response to client")
+        return response
     
     except Exception as e:
         logger.error(f"Chat pipeline failed: {e}", exc_info=True)
@@ -465,11 +530,6 @@ async def chat(request: ChatRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat pipeline failed: {str(e)}"
         )
-
-
-# ============================================================================
-# Run Server (for local development)
-# ============================================================================
 
 if __name__ == "__main__":
     import uvicorn

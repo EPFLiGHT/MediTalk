@@ -6,6 +6,7 @@ import logging
 import numpy as np
 from scipy.io.wavfile import write as write_wav
 from typing import Optional
+import json
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -18,9 +19,10 @@ bark_generate_audio = None
 bark_preload_models = None
 
 class TTSRequest(BaseModel):
-    text: str
+    conversation_path: str  # Path to conversation JSON file
     voice: str = "v2/en_speaker_6"  # BARK voice preset
     output_filename: Optional[str] = None
+    text: Optional[str] = None  # Optional direct text (for backward compatibility)
 
 @app.on_event("startup")
 async def startup_event():
@@ -115,14 +117,60 @@ def synthesize_speech(request: TTSRequest):
         if bark_generate_audio is None:
             raise HTTPException(status_code=503, detail="Bark TTS model not loaded")
         
-        logger.info(f"Synthesizing speech for text: {request.text[:50]}... (length: {len(request.text)} chars)")
+        # Extract text from conversation JSON or use direct text
+        text_to_synthesize = None
+        
+        if request.conversation_path:
+            # Read conversation JSON and extract last assistant message
+            try:
+                with open(request.conversation_path, 'r') as f:
+                    conversation = json.load(f)
+                
+                # Find last assistant message
+                messages = conversation.get('messages', [])
+                for message in reversed(messages):
+                    if message.get('role') == 'assistant':
+                        # Extract text from content array
+                        for content_item in message.get('content', []):
+                            if content_item.get('type') == 'text':
+                                text_to_synthesize = content_item.get('data')
+                                break
+                        if text_to_synthesize:
+                            break
+                
+                if not text_to_synthesize:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No assistant text found in conversation"
+                    )
+                    
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Conversation file not found: {request.conversation_path}"
+                )
+            except json.JSONDecodeError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid JSON in conversation file: {str(e)}"
+                )
+        elif request.text:
+            # Use direct text for backward compatibility
+            text_to_synthesize = request.text
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either conversation_path or text must be provided"
+            )
+        
+        logger.info(f"Synthesizing speech for text: {text_to_synthesize[:50]}... (length: {len(text_to_synthesize)} chars)")
         logger.info(f"Using voice preset: {request.voice}")
         
         # Import BARK constants
         from bark import SAMPLE_RATE
         
         # Split text into chunks
-        text_chunks = split_text_for_bark(request.text, max_chars=250)
+        text_chunks = split_text_for_bark(text_to_synthesize, max_chars=250)
         logger.info(f"Split text into {len(text_chunks)} chunks")
         
         # Generate audio for each chunk
@@ -163,7 +211,13 @@ def synthesize_speech(request: TTSRequest):
         return {
             "status": "success",
             "filename": filename,
-            "filepath": filepath,
+            "service": "bark"
+        }
+        
+        return {
+            "status": "success",
+            "filename": filename,
+            "audio_path": filepath,
             "url": f"/audio/{filename}"
         }
     

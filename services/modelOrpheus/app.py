@@ -5,6 +5,7 @@ from typing import Optional
 from infer import OrpheusTTS
 import os
 import logging
+import json
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -25,11 +26,12 @@ MODELS = {
 }
 
 class TTSRequest(BaseModel):
-    text: str
+    conversation_path: str  # Path to conversation JSON file
     voice: str = "tara"
     output_filename: str = None
     generate_in_parallel: bool = True  # New parameter for parallel generation
     language: str = "en"  # Language: "en" for English, "fr" for French
+    text: Optional[str] = None  # Optional direct text (for backward compatibility)
 
 @app.on_event("startup")
 async def startup_event():
@@ -124,6 +126,52 @@ def get_voices():
 @app.post("/synthesize")
 def synthesize(request: TTSRequest):
     try:
+        # Extract text from conversation JSON or use direct text
+        text_to_synthesize = None
+        
+        if request.conversation_path:
+            # Read conversation JSON and extract last assistant message
+            try:
+                with open(request.conversation_path, 'r') as f:
+                    conversation = json.load(f)
+                
+                # Find last assistant message
+                messages = conversation.get('messages', [])
+                for message in reversed(messages):
+                    if message.get('role') == 'assistant':
+                        # Extract text from content array
+                        for content_item in message.get('content', []):
+                            if content_item.get('type') == 'text':
+                                text_to_synthesize = content_item.get('data')
+                                break
+                        if text_to_synthesize:
+                            break
+                
+                if not text_to_synthesize:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No assistant text found in conversation"
+                    )
+                    
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Conversation file not found: {request.conversation_path}"
+                )
+            except json.JSONDecodeError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid JSON in conversation file: {str(e)}"
+                )
+        elif request.text:
+            # Use direct text for backward compatibility
+            text_to_synthesize = request.text
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either conversation_path or text must be provided"
+            )
+        
         # Get the TTS instance for the requested language
         language = request.language.lower()
         tts = tts_instances.get(language)
@@ -135,20 +183,19 @@ def synthesize(request: TTSRequest):
                 detail=f"Language '{language}' not available. Available languages: {', '.join(available)}"
             )
         
-        output_filename = request.output_filename or f"orpheus_output_{language}_{hash(request.text) % 10000}.wav"
+        output_filename = request.output_filename or f"orpheus_output_{language}_{hash(text_to_synthesize) % 10000}.wav"
         
         # Support both Docker and local deployment
         if os.path.exists("/tmp/orpheus_audio"):
             output_path = f"/tmp/orpheus_audio/{output_filename}"
         else:
-            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-            output_dir = os.path.join(project_root, "outputs", "orpheus")
+            output_dir = os.path.join("../../outputs", "orpheus")
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, output_filename)
         
         # Pass the generate_in_parallel parameter to the TTS engine
         output_file = tts.synthesize(
-            request.text, 
+            text_to_synthesize, 
             voice=request.voice, 
             output_path=output_path,
             generate_in_parallel=request.generate_in_parallel
@@ -157,7 +204,7 @@ def synthesize(request: TTSRequest):
         return JSONResponse(content={
             "status": "success",
             "filename": output_filename,
-            "audio_file": output_path,
+            "service": "orpheus",
             "message": "Audio generated successfully",
             "parallel_mode": request.generate_in_parallel,
             "language": language
@@ -193,3 +240,7 @@ def get_audio_file(filename: str):
         )
     else:
         raise HTTPException(status_code=404, detail="Audio file not found")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5005)

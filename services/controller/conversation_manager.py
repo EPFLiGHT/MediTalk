@@ -1,12 +1,13 @@
 import json
 import logging
 import os
+import re
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .data_models import Conversation, ConversationMessage
+from data_models import Conversation, ConversationMessage
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +30,69 @@ class ConversationManager:
         if self.verbose:
             logger.info(f"ConversationManager initialized with storage: {self.storage_dir}")
     
+    def _get_timestamped_filename(self, conversation_id: str, timestamp: datetime = None) -> str:
+        """Generate timestamped filename: conversation_id-YYYY_MM_DD-HH_MM_SS.json"""
+        if timestamp is None:
+            timestamp = datetime.utcnow()
+        
+        timestamp_str = timestamp.strftime("%Y_%m_%d-%H_%M_%S")
+        return f"{conversation_id}-{timestamp_str}.json"
+    
+    def _find_latest_conversation_file(self, conversation_id: str) -> Optional[str]:
+        """Find the latest timestamped file for a conversation ID by scanning directory."""
+        # Pattern: conversation_id-YYYY_MM_DD-HH_MM_SS.json
+        pattern = re.compile(rf"^{re.escape(conversation_id)}-\d{{4}}_\d{{2}}_\d{{2}}-\d{{2}}_\d{{2}}_\d{{2}}\.json$")
+        
+        matching_files = []
+        for filename in os.listdir(self.storage_dir):
+            if pattern.match(filename):
+                matching_files.append(filename)
+        
+        if not matching_files:
+            return None
+        
+        # Sort by filename (timestamp is in sortable format) and get latest
+        matching_files.sort(reverse=True)
+        latest_file = self.storage_dir / matching_files[0]
+        
+        return str(latest_file)
+    
     def get_conversation_path(self, conversation_id: str) -> str:
-        """Get file path for a conversation JSON file"""
-        return str(self.storage_dir / f"{conversation_id}.json")
+        """Get file path for the latest version of a conversation JSON file."""
+        latest_file = self._find_latest_conversation_file(conversation_id)
+        
+        if latest_file:
+            return latest_file
+        
+        # If no file exists yet, return path for new file with current timestamp
+        filename = self._get_timestamped_filename(conversation_id)
+        return str(self.storage_dir / filename)
     
     def _save_to_file(self, conversation: Conversation, verbose: bool = False):
-        """Save conversation to JSON file"""
-        file_path = self.get_conversation_path(conversation.id)
+        """Save conversation to timestamped JSON file and delete old versions."""
+        conversation_id = conversation.id
+        
+        # Find and delete old versions of this conversation
+        old_files = []
+        pattern = re.compile(rf"^{re.escape(conversation_id)}-\d{{4}}_\d{{2}}_\d{{2}}-\d{{2}}_\d{{2}}_\d{{2}}\.json$")
+        
+        for filename in os.listdir(self.storage_dir):
+            if pattern.match(filename):
+                old_file_path = self.storage_dir / filename
+                old_files.append(old_file_path)
+        
+        # Delete all old versions
+        for old_file in old_files:
+            try:
+                os.remove(old_file)
+                if verbose:
+                    logger.info(f"Deleted old version: {old_file}")
+            except Exception as e:
+                logger.warning(f"Failed to delete old file {old_file}: {e}")
+        
+        # Create new timestamped filename
+        filename = self._get_timestamped_filename(conversation_id, conversation.updated_at)
+        file_path = self.storage_dir / filename
         
         with open(file_path, 'w') as f:
             json.dump(conversation.dict(), f, indent=2, default=str)
@@ -150,7 +207,7 @@ class ConversationManager:
             return conversation
     
     def delete_conversation(self, conversation_id: str, verbose: bool = None) -> bool:
-        """Delete a conversation (from cache and file). Returns True if deleted, False if not found."""
+        """Delete a conversation (from cache and all timestamped files). Returns True if deleted, False if not found."""
         _verbose = verbose if verbose is not None else self.verbose
         
         with self._lock:
@@ -160,13 +217,19 @@ class ConversationManager:
                 del self._conversations[conversation_id]
                 deleted = True
             
-            # Delete file
-            file_path = self.get_conversation_path(conversation_id)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                deleted = True
-                if _verbose:
-                    logger.info(f"Deleted conversation {conversation_id} (file and cache)")
+            # Delete all timestamped files for this conversation
+            pattern = re.compile(rf"^{re.escape(conversation_id)}-\d{{4}}_\d{{2}}_\d{{2}}-\d{{2}}_\d{{2}}_\d{{2}}\.json$")
+            
+            for filename in os.listdir(self.storage_dir):
+                if pattern.match(filename):
+                    file_path = self.storage_dir / filename
+                    try:
+                        os.remove(file_path)
+                        deleted = True
+                        if _verbose:
+                            logger.info(f"Deleted conversation file: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete {file_path}: {e}")
             
             if not deleted and _verbose:
                 logger.warning(f"Cannot delete: conversation {conversation_id} not found")

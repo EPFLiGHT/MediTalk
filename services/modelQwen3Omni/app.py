@@ -33,24 +33,20 @@ expected_sr = None
 CONVERSATIONS_DIR = "../../outputs/multimeditron/conversations"
 
 OUTPUT_TEXT_DIR = "../../outputs/qwen3omni/text"
-OUTPUT_AUDIO_DIR = "../../outputs/qwen3omni/audio"
+OUTPUT_AUDIO_DIR = "../../outputs/qwen3omni"
 os.makedirs(OUTPUT_TEXT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_AUDIO_DIR, exist_ok=True)
 
-AUDIO_STORAGE_DIR = {
-    "orpheus_": os.getenv("AUDIO_DIR_ORPHEUS"),
-    "bark_": os.getenv("AUDIO_DIR_BARK"),
-    "csm_": os.getenv("AUDIO_DIR_CSM"),
-    "qwen3omni_": os.getenv("AUDIO_DIR_QWEN3OMNI")
-}
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 curr_request_start_timestamp = None
 curr_request_end_timestamp = None
 last_request_duration = None
 
 class Qwen3OmniTTSRequest(BaseModel):
-    conversation_json_file: str
+    conversation_path: str  # Full path to conversation JSON file
     speaker: str = "Ethan" # Options: "Ethan", "Chelsie", "Aiden"
+    conversation_json_file: str = None  # Deprecated - for backward compatibility
 
 @app.on_event("startup")
 async def startup_event():
@@ -116,8 +112,17 @@ async def synthesize_speech(request: Qwen3OmniTTSRequest):
 
     curr_request_start_timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     try:
-        # Load conversation from JSON file
-        conversation_json_path = os.path.join(CONVERSATIONS_DIR, request.conversation_json_file)
+        # Determine conversation JSON path
+        if request.conversation_path:
+            conversation_json_path = request.conversation_path
+        elif request.conversation_json_file:
+            # Backward compatibility - construct path from filename
+            conversation_json_path = os.path.join(CONVERSATIONS_DIR, request.conversation_json_file)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either conversation_path or conversation_json_file must be provided"
+            )
         conversation_data = load_conversation_from_json(conversation_json_path, verbose=VERBOSE)
 
         # Load audio files only for the last N turns (excluding final assistant turn)
@@ -136,9 +141,14 @@ async def synthesize_speech(request: Qwen3OmniTTSRequest):
         compute_request_duration(verbose=VERBOSE)
 
         # Post-process and save outputs
-        response_postprocessing(generated_ids, generated_wav, inputs)
+        output_filename = response_postprocessing(generated_ids, generated_wav, inputs)
 
-        return JSONResponse(content={"message": "Synthesis completed successfully."})
+        return JSONResponse(content={
+            "status": "success",
+            "filename": output_filename,
+            "service": "qwen3omni",
+            "message": "Synthesis completed successfully."
+        })
 
     except Exception as e:
         logger.error(f"Error during synthesis: {e}")
@@ -170,7 +180,7 @@ def load_conversation_audios(conversation_data, max_context_turns=3, verbose=Tru
         logger.info(f"\nLoading audio files for last {max_context_turns} turns...")
     
     conversation_with_audios_loaded = deepcopy(conversation_data)
-    conversation_turns = conversation_with_audios_loaded["conversation"]
+    conversation_turns = conversation_with_audios_loaded["messages"]
     
     # Find the last assistant turn (the one qwen3omni will generate audio for)
     last_assistant_idx = None
@@ -191,31 +201,24 @@ def load_conversation_audios(conversation_data, max_context_turns=3, verbose=Tru
 
         for content_item in turn["content"]:
             if content_item["type"] == "audio":
-                audio_path = get_audio_directory(content_item["audio"], verbose=verbose)
+                # Path is stored as /outputs/service/filename.wav, convert to absolute path
+                relative_path = content_item["data"].lstrip("/")  # Remove leading slash
+                audio_path = os.path.join(PROJECT_ROOT, relative_path)
+                
+                if verbose:
+                    logger.info(f"Loading audio: {content_item['data']} -> {audio_path}")
                 
                 try:
                     # Load and resample audio
                     audio_data, sr = librosa.load(audio_path, sr=expected_sr)
                     
-                    # Replace path with actual audio data
+                    # Store audio data in the content item
                     content_item["audio"] = audio_data
 
                 except Exception as e:
                     raise RuntimeError(f"Error loading audio file {audio_path}: {e}")
 
     return conversation_with_audios_loaded
-
-def get_audio_directory(audio_name, verbose=True):
-    """Get the directory path for a given audio file name."""
-
-    global AUDIO_STORAGE_DIR
-    
-    try:
-        for prefix, directory in AUDIO_STORAGE_DIR.items():
-            if audio_name.startswith(prefix):
-                return os.path.join(directory, audio_name)
-    except Exception as e:
-        raise RuntimeError(f"Error determining audio directory for {audio_name}: {e}")
 
 def extract_target_text(conversation_data, verbose=True):
     """
@@ -231,8 +234,10 @@ def extract_target_text(conversation_data, verbose=True):
     if verbose:
         logger.info("\nExtracting target text for speech generation...")
     
+    conversation_turns = conversation_data["messages"]
+    
     last_assistant_turn = None
-    for turn in reversed(conversation_data["conversation"]):
+    for turn in reversed(conversation_turns):
         if turn["role"] == "assistant":
             last_assistant_turn = turn
             break
@@ -243,7 +248,7 @@ def extract_target_text(conversation_data, verbose=True):
     target_text = ""
     for content in last_assistant_turn["content"]:
         if content["type"] == "text":
-            target_text = content["text"]
+            target_text = content["data"]
             break
 
     if verbose:
@@ -273,13 +278,14 @@ def prepare_conversation_input(conversation_data, target_text=None, max_context_
         if target_text:
             # Remove the last assistant turn
             conversation_for_input = deepcopy(conversation_data)
-            if conversation_for_input["conversation"][-1]["role"] == "assistant":
-                conversation_for_input["conversation"].pop()
+            
+            if conversation_for_input["messages"][-1]["role"] == "assistant":
+                conversation_for_input["messages"].pop()
             else:
                 raise ValueError("Last turn in conversation is not from assistant as expected.")
 
             # Extract conversation turns
-            all_turns = conversation_for_input["conversation"]
+            all_turns = conversation_for_input["messages"]
             
             # Keep only the last N turns as context
             if len(all_turns) > max_context_turns:
@@ -383,6 +389,9 @@ def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
         generated_ids (torch.Tensor): Generated token IDs from the model
         generated_wav (torch.Tensor): Generated waveform from the model
         inputs (dict): Original inputs used for generation
+        
+    Returns:
+        str: The filename of the generated audio file
     """
     global qwen3omni_processor, curr_request_end_timestamp
 
@@ -411,7 +420,8 @@ def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
     
     # Save generated audio
     try:
-        output_audio_path = os.path.join(OUTPUT_AUDIO_DIR, f"qwen3omni_{curr_request_end_timestamp}.wav")
+        audio_filename = f"qwen3omni_{curr_request_end_timestamp}.wav"
+        output_audio_path = os.path.join(OUTPUT_AUDIO_DIR, audio_filename)
         if verbose:
             logger.info(f"Saving generated audio to: {output_audio_path}")
         
@@ -423,6 +433,8 @@ def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
 
         if verbose:
             logger.info(f"Generated audio saved to: {output_audio_path}")
+        
+        return audio_filename
 
     except Exception as e:
         raise RuntimeError(f"Error during response audio saving: {e}")

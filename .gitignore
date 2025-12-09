@@ -101,6 +101,7 @@ tmp/
 dmypy.json
 
 # Shell scripts
-test.sh
-help.sh
 submit-job.sh
+
+# Input folder
+inputs/*

@@ -57,11 +57,12 @@ echo ""
 
 # Kill any orphaned processes from previous manual starts
 echo "Cleaning up any orphaned processes..."
+pkill -9 -f "services/controller.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelOrpheus.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelBark.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelWhisper.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelMultiMeditron.*python.*app.py" 2>/dev/null
-pkill -9 -f "services/webui.*python.*app.py" 2>/dev/null
+pkill -9 -f "services/webui.*streamlit.*app.py" 2>/dev/null
 sleep 2
 echo "✓ Cleanup complete"
 echo ""
@@ -264,31 +265,34 @@ echo ""
 echo "Starting all services..."
 echo ""
 
-# 1. Start Orpheus TTS
+# 1. Start Controller (orchestration service - should start first)
+echo "Starting Controller (orchestration service)..."
+start_service "controller" 8000
+
+sleep 2
+
+# 2. Start Orpheus TTS
 start_service "modelOrpheus" 5005
 
-# 2. Start Bark TTS
+# 3. Start Bark TTS
 start_service "modelBark" 5008
 
-# 3. Start CSM TTS
+# 4. Start CSM TTS
 start_service "modelCSM" 5010
 
-# 4. Start Whisper ASR
+# 5. Start Whisper ASR
 start_service "modelWhisper" 5007
 
 # Give TTS and ASR a moment to initialize
 sleep 3
 
-# 5. Start MultiMeditron
+# 6. Start MultiMeditron
 start_service "modelMultiMeditron" 5009
 
 # Give AI models time to load
 sleep 5
 
-# 6. Start WebUI API (depends on all services)
-start_service "webui" 8080
-
-# 7. Start Streamlit UI
+# 7. Start Streamlit UI (uses controller)
 start_streamlit "webui" 8503
 
 # 8. Start Qwen3-Omni model service
@@ -300,7 +304,7 @@ echo "All services started! "
 echo ""
 echo "Service URLs:"
 echo "  - Streamlit Web Interface: http://localhost:8503"
-echo "  - FastAPI Web Interface: http://localhost:8080"
+echo "  - Controller (orchestration): http://localhost:8000"
 echo "  - MultiMeditron AI (multimodal): http://localhost:5009"
 echo "  - Orpheus TTS: http://localhost:5005"
 echo "  - Bark TTS: http://localhost:5008"
@@ -311,7 +315,8 @@ echo ""
 echo "Logs are available in the logs/ directory"
 echo ""
 echo "To check service status:"
-echo "  tail -f logs/webui.log"
+echo "  tail -f logs/controller.log"
+echo "  tail -f logs/webui-streamlit.log"
 echo "  tail -f logs/modelMultiMeditron.log"
 echo "  tail -f logs/modelOrpheus.log"
 echo "  tail -f logs/modelBark.log"

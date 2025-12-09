@@ -268,11 +268,17 @@ async def call_tts(
         if conversation_json_path:
             logger.info(f"  Conversation file: {conversation_json_path}")
     
+    # Build data payload - conversation_path is now the primary method
+    data_payload = {
+        "conversation_path": conversation_json_path,
+        **kwargs
+    }
+    
+    # Keep target_text for backward compatibility with services not yet updated
+    if not conversation_json_path and target_text:
+        data_payload["text"] = target_text
+    
     return await client.post(
         "/synthesize",
-        data={
-            "target_text": target_text,
-            "conversation_path": conversation_json_path,
-            **kwargs
-        }
+        data=data_payload
     )

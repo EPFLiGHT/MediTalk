@@ -1,9 +1,14 @@
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from uuid import UUID, uuid4
+import secrets
 
 from pydantic import BaseModel, Field
+
+
+def generate_short_id() -> str:
+    """Generate a 4-character hexadecimal ID"""
+    return secrets.token_hex(2)  # 2 bytes = 4 hex characters
 
 # ============================================================================
 # Data Models for Conversation Management
@@ -28,7 +33,7 @@ class MessageContent(BaseModel):
 
 class ConversationMessage(BaseModel):
     """Single message in a conversation"""
-    id: str = Field(default_factory=lambda: str(uuid4()))
+    id: str = Field(default_factory=generate_short_id)
     role: MessageRole
     content: List[MessageContent]
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -37,7 +42,7 @@ class ConversationMessage(BaseModel):
 
 class Conversation(BaseModel):
     """Conversation object stored by controller"""
-    id: str = Field(default_factory=lambda: str(uuid4()))
+    id: str = Field(default_factory=generate_short_id)
     messages: List[ConversationMessage] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -80,10 +80,11 @@ mkdir -p outputs/bark
 mkdir -p outputs/csm
 mkdir -p outputs/csm/context
 mkdir -p models
+mkdir -p inputs/controller/conversations
 echo "✓ Created output directories"
 
 # Setup virtual environments for each service
-services=("webui" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper" "modelQwen3Omni")
+services=("controller" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper" "modelQwen3Omni" "webui")
 
 for service in "${services[@]}"; do
     echo ""
