@@ -7,8 +7,49 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to project root
 cd "$PROJECT_ROOT"
 
-echo "Stopping MediTalk services..."
-echo "=============================="
+# Parse arguments
+SERVICE_NAME="$1"
+
+# Service definitions (service_name:friendly_name)
+declare -A SERVICES=(
+    ["orpheus-monitor"]="orpheus-monitor"
+    ["webui-streamlit"]="webui-streamlit"
+    ["webui"]="webui"
+    ["modelMultiMeditron"]="modelMultiMeditron"
+    ["modelBark"]="modelBark"
+    ["modelCSM"]="modelCSM"
+    ["modelWhisper"]="modelWhisper"
+    ["modelOrpheus"]="modelOrpheus"
+    ["modelQwen3Omni"]="modelQwen3Omni"
+    ["controller"]="controller"
+)
+
+# Function to show usage
+usage() {
+    echo "Usage: $0 [service_name]"
+    echo ""
+    echo "Stop MediTalk services"
+    echo ""
+    echo "Arguments:"
+    echo "  service_name    Optional. Name of specific service to stop."
+    echo "                  If omitted, all services will be stopped."
+    echo ""
+    echo "Available services:"
+    for service in "${!SERVICES[@]}"; do
+        echo "  - $service"
+    done | sort
+    echo ""
+    echo "Examples:"
+    echo "  $0                      # Stop all services"
+    echo "  $0 modelOrpheus         # Stop only Orpheus service"
+    echo "  $0 webui-streamlit      # Stop only Streamlit UI"
+    exit 0
+}
+
+# Show help if requested
+if [ "$SERVICE_NAME" == "-h" ] || [ "$SERVICE_NAME" == "--help" ]; then
+    usage
+fi
 
 # Function to stop a service
 stop_service() {
@@ -38,11 +79,36 @@ stop_service() {
     fi
 }
 
+# If specific service requested
+if [ ! -z "$SERVICE_NAME" ]; then
+    # Check if service exists
+    if [ -z "${SERVICES[$SERVICE_NAME]}" ]; then
+        echo "ERROR: Unknown service '$SERVICE_NAME'"
+        echo ""
+        echo "Available services:"
+        for service in "${!SERVICES[@]}"; do
+            echo "  - $service"
+        done | sort
+        exit 1
+    fi
+    
+    echo "Stopping $SERVICE_NAME..."
+    echo "=============================="
+    stop_service "$SERVICE_NAME"
+    echo ""
+    echo "$SERVICE_NAME stopped! ✓"
+    exit 0
+fi
+
+# Stop all services
+echo "Stopping MediTalk services..."
+echo "=============================="
+
 # Stop Orpheus monitor first if running
 stop_service "orpheus-monitor"
 
 # Stop services in reverse order
-services=("webui-streamlit" "webui" "modelMultiMeditron" "modelBark" "modelCSM" "modelWhisper" "modelOrpheus")
+services=("webui-streamlit" "webui" "modelQwen3Omni" "modelMultiMeditron" "modelBark" "modelCSM" "modelWhisper" "modelOrpheus" "controller")
 
 for service in "${services[@]}"; do
     stop_service "$service"

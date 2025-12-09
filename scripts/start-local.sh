@@ -7,6 +7,49 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to project root
 cd "$PROJECT_ROOT"
 
+# Parse arguments
+SERVICE_NAME="$1"
+
+# Service definitions with ports
+declare -A SERVICE_PORTS=(
+    ["modelOrpheus"]="5005"
+    ["modelBark"]="5008"
+    ["modelCSM"]="5010"
+    ["modelWhisper"]="5007"
+    ["modelMultiMeditron"]="5009"
+    ["modelQwen3Omni"]="5014"
+    ["webui"]="8080"
+    ["webui-streamlit"]="8503"
+    ["controller"]="8000"
+)
+
+# Function to show usage
+usage() {
+    echo "Usage: $0 [service_name]"
+    echo ""
+    echo "Start MediTalk services"
+    echo ""
+    echo "Arguments:"
+    echo "  service_name    Optional. Name of specific service to start."
+    echo "                  If omitted, all services will be started."
+    echo ""
+    echo "Available services:"
+    for service in "${!SERVICE_PORTS[@]}"; do
+        echo "  - $service (port ${SERVICE_PORTS[$service]})"
+    done | sort
+    echo ""
+    echo "Examples:"
+    echo "  $0                      # Start all services"
+    echo "  $0 modelOrpheus         # Start only Orpheus service"
+    echo "  $0 webui-streamlit      # Start only Streamlit UI"
+    exit 0
+}
+
+# Show help if requested
+if [ "$SERVICE_NAME" == "-h" ] || [ "$SERVICE_NAME" == "--help" ]; then
+    usage
+fi
+
 echo "Starting MediTalk - Medical AI with Voice (Local Mode)"
 echo "======================================================="
 echo "Working directory: $PROJECT_ROOT"
@@ -175,9 +218,50 @@ start_streamlit() {
 # Create logs directory
 mkdir -p logs
 
-# Start services in order (dependencies first)
+# If specific service requested
+if [ ! -z "$SERVICE_NAME" ]; then
+    # Check if service exists
+    if [ -z "${SERVICE_PORTS[$SERVICE_NAME]}" ]; then
+        echo "ERROR: Unknown service '$SERVICE_NAME'"
+        echo ""
+        echo "Available services:"
+        for service in "${!SERVICE_PORTS[@]}"; do
+            echo "  - $service (port ${SERVICE_PORTS[$service]})"
+        done | sort
+        exit 1
+    fi
+    
+    PORT="${SERVICE_PORTS[$SERVICE_NAME]}"
+    
+    echo "Starting $SERVICE_NAME on port $PORT..."
+    echo ""
+    
+    # Handle special case for Streamlit
+    if [ "$SERVICE_NAME" == "webui-streamlit" ]; then
+        start_streamlit "webui" "$PORT"
+    else
+        start_service "$SERVICE_NAME" "$PORT"
+    fi
+    
+    echo ""
+    echo "=========================================="
+    echo "$SERVICE_NAME started! ✓"
+    echo ""
+    echo "Service URL: http://localhost:$PORT"
+    echo "Log file: logs/$SERVICE_NAME.log"
+    echo ""
+    echo "To check status:"
+    echo "  tail -f logs/$SERVICE_NAME.log"
+    echo ""
+    echo "To stop service:"
+    echo "  ./scripts/stop-local.sh $SERVICE_NAME"
+    echo "=========================================="
+    exit 0
+fi
+
+# Start all services in order (dependencies first)
 echo ""
-echo "Starting services..."
+echo "Starting all services..."
 echo ""
 
 # 1. Start Orpheus TTS
