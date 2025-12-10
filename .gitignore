@@ -105,3 +105,9 @@ submit-job.sh
 
 # Input folder
 inputs/*
+
+# Data folder
+data/raw/*
+data/processed/*
+data/venv/
+data/.env
