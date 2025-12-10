@@ -24,14 +24,9 @@ ORPHEUS_MODEL=canopylabs/orpheus-3b-0.1-ft
 WHISPER_MODEL=base
 ```
 
-**Note:** You need access to:
-- [meta-llama/Meta-Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct) (gated)
-- [ClosedMeditron/Mulimeditron-End2End-CLIP-medical](https://huggingface.co/ClosedMeditron/Mulimeditron-End2End-CLIP-medical) (private)
-  --> The private MultiMeditron model can be requested from EPFL LiGHT lab team.
-
 ## Deployment
 
-**Setup (first run only):**
+**Setup environments (first run only):**
 ```bash
 ./scripts/setup-local.sh
 ```
@@ -67,18 +62,19 @@ For deployment on the EPFL RCP cluster, please refer to the [LiGHT RCP Documenta
 | MultiMeditron | 5009 | Medical AI model |
 | Whisper | 5007 | Speech-to-text |
 | Orpheus | 5005 | Text-to-speech |
-| Bark | 5008 | Text-to-speech (multilingual) |
-| CSM | 5010 | Conversational speech |
-| Qwen3-Omni | 5014 | Context-aware TTS |
+| Bark | 5008 | Text-to-speech |
+| CSM | 5010 | Conversational Text-to-speech |
+| Qwen3-Omni | 5014 | Conversational Text-to-speech |
 
 ## Troubleshooting
 
 **Service won't start:**
 ```bash
 tail -f logs/<service>.log
-cd services/<service> && source venv/bin/activate
-pip install -r requirements.txt
 ```
+Check for errors, missing dependencies or missing tokens.
+
+Note: Some services may take several minutes to load models on first run.
 
 **Missing ffmpeg:**
 ```bash
