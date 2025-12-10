@@ -106,6 +106,18 @@ class KaggleDatasetFetcher(DatasetFetcher):
         self.dataset_name = dataset_name
         self.local_dir = self.base_dir / dataset_name
     
+    def unzip_dataset(self):
+        """Unzip the downloaded dataset files."""
+        import zipfile
+        
+        for item in self.local_dir.iterdir():
+            if item.suffix == '.zip':
+                print(f"Unzipping {item}...")
+                with zipfile.ZipFile(item, 'r') as zip_ref:
+                    zip_ref.extractall(self.local_dir)
+                item.unlink()
+                print(f"✓ Unzipped {item.name}")
+
     def fetch(self) -> Path:
         """Download the dataset from Kaggle."""
         # Check if dataset already exists
@@ -133,7 +145,6 @@ class KaggleDatasetFetcher(DatasetFetcher):
         }
         
         print(f"Downloading {self.dataset_id} to {self.local_dir}...")
-        print("(Kaggle API does not show progress - please wait...)")
         
         try:
             # Write kaggle.json
@@ -145,24 +156,33 @@ class KaggleDatasetFetcher(DatasetFetcher):
             kaggle.api.authenticate()
             self.local_dir.mkdir(parents=True, exist_ok=True)
             
-            # Download with quiet=False for some output
+            # Download
             kaggle.api.dataset_download_files(
                 self.dataset_id,
                 path=str(self.local_dir),
-                unzip=True,
+                unzip=False,
                 quiet=False
             )
             
             print(f"✓ Successfully downloaded {self.dataset_name}")
-            
-            # Show what was downloaded
-            files = list(self.local_dir.glob("*"))
-            print(f"  Downloaded {len(files)} file(s):")
-            for f in files[:5]:
-                print(f"    - {f.name}")
-            if len(files) > 5:
-                print(f"    ... and {len(files) - 5} more")
-            
+
+            print("Unzipping dataset...")
+            self.unzip_dataset()
+            print("✓ Unzipping completed.")
+
+            print("Cleaning up duplicate folders if any...")
+            import shutil
+            folders = [d for d in self.local_dir.iterdir() if d.is_dir()]
+            if len(folders) > 1:
+                # Normalize names and find duplicates
+                seen = {}
+                for folder in folders:
+                    normalized = folder.name.lower()
+                    if normalized in seen:
+                        print(f"  Removing duplicate folder: {folder.name}")
+                        shutil.rmtree(folder)
+                    else:
+                        seen[normalized] = folder
             return self.local_dir
         
         except Exception as e:
@@ -202,7 +222,7 @@ def main():
         dataset_name="United-Syn-Med"
     )
     
-    # Fetch Medical Speech Transcription from Kaggle
+    # Fetch Medical Speech Transcription and Intent from Kaggle
     kaggle_fetcher = KaggleDatasetFetcher(
         dataset_id="paultimothymooney/medical-speech-transcription-and-intent",
         dataset_name="medical-speech-transcription-and-intent"

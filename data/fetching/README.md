@@ -32,6 +32,8 @@ chmod +x fetch_data.sh
 ./fetch_data.sh
 ```
 
+Note: Downloading may take several minutes depending on your internet connection. Additional time may be required for unzipping the datasets after downloading.
+
 ## Output Structure
 ```
 ../raw/
