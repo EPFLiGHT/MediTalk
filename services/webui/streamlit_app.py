@@ -251,17 +251,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Service URLs
-MULTIMEDITRON_URL = os.getenv("MULTIMEDITRON_URL", "http://localhost:5009")
+# Controller URL (intermediary for all services)
+CONTROLLER_URL = os.getenv("CONTROLLER_URL", "http://localhost:8000")
+
+# Direct service URLs (for voice listing and file serving only)
 ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
 CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
-WHISPER_URL = os.getenv("WHISPER_URL", "http://localhost:5007")
-QWEN3OMNI_URL = os.getenv("QWEN3OMNI_URL", "http://localhost:5014")
 
 
-# Helper function to load SVG icons
 def load_icon(icon_name, width=20, height=20, color="#667eea"):
+    """Load and customize SVG icon"""
     try:
         with open(f"assets/{icon_name}.svg", "r") as f:
             svg = f.read()
@@ -274,6 +274,8 @@ def load_icon(icon_name, width=20, height=20, color="#667eea"):
 
 
 # Initialize session state
+if 'conversation_id' not in st.session_state:
+    st.session_state.conversation_id = None
 if 'conversation_history' not in st.session_state:
     st.session_state.conversation_history = []
 if 'voices' not in st.session_state:
@@ -286,6 +288,7 @@ with st.sidebar:
     if st.button("New Conversation", use_container_width=True, icon=":material/add_comment:"):
         if len(st.session_state.conversation_history) > 0:
             st.session_state.conversation_history = []
+            st.session_state.conversation_id = None # Reset conversation ID
             st.rerun()
         else:
             st.info("No conversation to clear")
@@ -425,13 +428,21 @@ with st.sidebar:
             cache_key = f"{tts_service}_{language if tts_service == 'bark' else ''}"
             
             if cache_key not in st.session_state.voices:
+                # Set default voices immediately to prevent blocking
+                if tts_service == "orpheus":
+                    st.session_state.voices[cache_key] = {"tara": "Tara (female)"}
+                else:
+                    default_voice = "v2/fr_speaker_6" if language == "fr" else "v2/en_speaker_6"
+                    st.session_state.voices[cache_key] = {default_voice: f"{language.upper()} Speaker 6"}
+                
+                # Try to fetch voices in background (non-blocking)
                 try:
                     if tts_service == "orpheus":
                         voice_url = f"{ORPHEUS_URL}/voices"
                     else:
                         voice_url = f"{BARK_URL}/voices"
                     
-                    response = requests.get(voice_url, timeout=5)
+                    response = requests.get(voice_url, timeout=2)  # Reduced timeout
                     if response.status_code == 200:
                         data = response.json()
                         if tts_service == "orpheus":
@@ -442,20 +453,14 @@ with st.sidebar:
                         elif tts_service == "bark":
                             lang_key = 'french' if language == 'fr' else 'english'
                             bark_voices = data.get('voices', {}).get(lang_key, [])
-                            st.session_state.voices[cache_key] = {
-                                v: v.replace('v2/', '').replace('_', ' ').title()
-                                for v in bark_voices
-                            }
-                    else:
-                        if tts_service == "orpheus":
-                            st.session_state.voices[cache_key] = {"tara": "Tara (female)"}
-                        else:
-                            st.session_state.voices[cache_key] = {"v2/en_speaker_6": "En Speaker 6"}
-                except Exception:
-                    if tts_service == "orpheus":
-                        st.session_state.voices[cache_key] = {"tara": "Tara (female)"}
-                    else:
-                        st.session_state.voices[cache_key] = {"v2/en_speaker_6": "En Speaker 6"}
+                            if bark_voices:
+                                st.session_state.voices[cache_key] = {
+                                    v: v.replace('v2/', '').replace('_', ' ').title()
+                                    for v in bark_voices
+                                }
+                except Exception as e:
+                    # Keep default voices if fetch fails
+                    pass
             
             if tts_service == "orpheus":
                 voices = st.session_state.voices.get(cache_key, {"tara": "Tara (female)"})
@@ -610,8 +615,9 @@ if len(st.session_state.conversation_history) > 0:
                         )
                     
                     audio_url = msg['audio_url']
+                    # If it's a relative path, prepend controller URL
                     if not audio_url.startswith('http'):
-                        audio_url = f"http://localhost:8080{audio_url}"
+                        audio_url = f"{CONTROLLER_URL}{audio_url}"
                     
                     try:
                         st.audio(audio_url)
@@ -652,23 +658,37 @@ if (
     
     with st.spinner("Thinking... This may take a few minutes..."):
         try:
-            endpoint = f"{MULTIMEDITRON_URL}/ask"
+            endpoint = f"{CONTROLLER_URL}/chat"
             
             tts_language = language
             if 'detected_language' in st.session_state and tts_service in ["orpheus", "bark"]:
                 tts_language = st.session_state.detected_language
                 del st.session_state.detected_language
             
+            # Build ChatRequest payload
             payload = {
-                "question": last_question,
-                "generate_audio": generate_audio,
-                "voice": voice,
+                "conversation_id": st.session_state.conversation_id, # None for the first message
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "data": last_question
+                        }
+                    ]
+                },
+                "use_stt": False,
+                "use_llm": True,
+                "use_tts": generate_audio,
+                "llm_service": "multimeditron",
                 "tts_service": tts_service,
-                "language": tts_language if tts_service == "orpheus" else "en",
-                "temperature": temperature,
-                "max_length": max_length,
-                "conversation_history": st.session_state.conversation_history[:-1],
-                "generate_in_parallel": generate_in_parallel if tts_service == "orpheus" else False
+                "tts_language": tts_language,
+                "context": {
+                    "temperature": temperature,
+                    "max_length": max_length,
+                    "voice": voice,
+                    "generate_in_parallel": generate_in_parallel if tts_service == "orpheus" else False
+                }
             }
             
             response = requests.post(endpoint, json=payload, timeout=600)
@@ -676,15 +696,33 @@ if (
             if response.status_code == 200:
                 data = response.json()
                 
+                # Store conversation ID from controller
+                if not st.session_state.conversation_id:
+                    st.session_state.conversation_id = data.get("conversation_id")
+                
+                # Extract assistant message and text content
+
+                assistant_message = data.get("assistant_message", {})
+                assistant_content = assistant_message.get("content", [])
+
+                text_content = next(
+                    (c["data"] for c in assistant_content if c["type"] == "text"),
+                    ""
+                )
+                
                 assistant_msg = {
                     "role": "assistant",
-                    "content": data.get("answer", "")
+                    "content": text_content
                 }
                 
-                if generate_audio and data.get("audio_url"):
-                    assistant_msg["audio_url"] = data["audio_url"]
-                    if data.get("context_skipped"):
-                        assistant_msg["context_skipped"] = True
+                # Find audio content if available
+                if generate_audio:
+                    audio_content = next(
+                        (c for c in assistant_content if c["type"] == "audio"),
+                        None
+                    )
+                    if audio_content:
+                        assistant_msg["audio_url"] = audio_content["data"]
                 
                 st.session_state.conversation_history.append(assistant_msg)
                 st.session_state.processing = False

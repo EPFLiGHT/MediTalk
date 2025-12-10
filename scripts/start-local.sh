@@ -7,6 +7,49 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to project root
 cd "$PROJECT_ROOT"
 
+# Parse arguments
+SERVICE_NAME="$1"
+
+# Service definitions with ports
+declare -A SERVICE_PORTS=(
+    ["modelOrpheus"]="5005"
+    ["modelBark"]="5008"
+    ["modelCSM"]="5010"
+    ["modelWhisper"]="5007"
+    ["modelMultiMeditron"]="5009"
+    ["modelQwen3Omni"]="5014"
+    ["webui"]="8080"
+    ["webui-streamlit"]="8503"
+    ["controller"]="8000"
+)
+
+# Function to show usage
+usage() {
+    echo "Usage: $0 [service_name]"
+    echo ""
+    echo "Start MediTalk services"
+    echo ""
+    echo "Arguments:"
+    echo "  service_name    Optional. Name of specific service to start."
+    echo "                  If omitted, all services will be started."
+    echo ""
+    echo "Available services:"
+    for service in "${!SERVICE_PORTS[@]}"; do
+        echo "  - $service (port ${SERVICE_PORTS[$service]})"
+    done | sort
+    echo ""
+    echo "Examples:"
+    echo "  $0                      # Start all services"
+    echo "  $0 modelOrpheus         # Start only Orpheus service"
+    echo "  $0 webui-streamlit      # Start only Streamlit UI"
+    exit 0
+}
+
+# Show help if requested
+if [ "$SERVICE_NAME" == "-h" ] || [ "$SERVICE_NAME" == "--help" ]; then
+    usage
+fi
+
 echo "Starting MediTalk - Medical AI with Voice (Local Mode)"
 echo "======================================================="
 echo "Working directory: $PROJECT_ROOT"
@@ -14,11 +57,12 @@ echo ""
 
 # Kill any orphaned processes from previous manual starts
 echo "Cleaning up any orphaned processes..."
+pkill -9 -f "services/controller.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelOrpheus.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelBark.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelWhisper.*python.*app.py" 2>/dev/null
 pkill -9 -f "services/modelMultiMeditron.*python.*app.py" 2>/dev/null
-pkill -9 -f "services/webui.*python.*app.py" 2>/dev/null
+pkill -9 -f "services/webui.*streamlit.*app.py" 2>/dev/null
 sleep 2
 echo "✓ Cleanup complete"
 echo ""
@@ -175,36 +219,80 @@ start_streamlit() {
 # Create logs directory
 mkdir -p logs
 
-# Start services in order (dependencies first)
+# If specific service requested
+if [ ! -z "$SERVICE_NAME" ]; then
+    # Check if service exists
+    if [ -z "${SERVICE_PORTS[$SERVICE_NAME]}" ]; then
+        echo "ERROR: Unknown service '$SERVICE_NAME'"
+        echo ""
+        echo "Available services:"
+        for service in "${!SERVICE_PORTS[@]}"; do
+            echo "  - $service (port ${SERVICE_PORTS[$service]})"
+        done | sort
+        exit 1
+    fi
+    
+    PORT="${SERVICE_PORTS[$SERVICE_NAME]}"
+    
+    echo "Starting $SERVICE_NAME on port $PORT..."
+    echo ""
+    
+    # Handle special case for Streamlit
+    if [ "$SERVICE_NAME" == "webui-streamlit" ]; then
+        start_streamlit "webui" "$PORT"
+    else
+        start_service "$SERVICE_NAME" "$PORT"
+    fi
+    
+    echo ""
+    echo "=========================================="
+    echo "$SERVICE_NAME started! ✓"
+    echo ""
+    echo "Service URL: http://localhost:$PORT"
+    echo "Log file: logs/$SERVICE_NAME.log"
+    echo ""
+    echo "To check status:"
+    echo "  tail -f logs/$SERVICE_NAME.log"
+    echo ""
+    echo "To stop service:"
+    echo "  ./scripts/stop-local.sh $SERVICE_NAME"
+    echo "=========================================="
+    exit 0
+fi
+
+# Start all services in order (dependencies first)
 echo ""
-echo "Starting services..."
+echo "Starting all services..."
 echo ""
 
-# 1. Start Orpheus TTS
+# 1. Start Controller (orchestration service - should start first)
+echo "Starting Controller (orchestration service)..."
+start_service "controller" 8000
+
+sleep 2
+
+# 2. Start Orpheus TTS
 start_service "modelOrpheus" 5005
 
-# 2. Start Bark TTS
+# 3. Start Bark TTS
 start_service "modelBark" 5008
 
-# 3. Start CSM TTS
+# 4. Start CSM TTS
 start_service "modelCSM" 5010
 
-# 4. Start Whisper ASR
+# 5. Start Whisper ASR
 start_service "modelWhisper" 5007
 
 # Give TTS and ASR a moment to initialize
 sleep 3
 
-# 5. Start MultiMeditron
+# 6. Start MultiMeditron
 start_service "modelMultiMeditron" 5009
 
 # Give AI models time to load
 sleep 5
 
-# 6. Start WebUI API (depends on all services)
-start_service "webui" 8080
-
-# 7. Start Streamlit UI
+# 7. Start Streamlit UI (uses controller)
 start_streamlit "webui" 8503
 
 # 8. Start Qwen3-Omni model service
@@ -216,7 +304,7 @@ echo "All services started! "
 echo ""
 echo "Service URLs:"
 echo "  - Streamlit Web Interface: http://localhost:8503"
-echo "  - FastAPI Web Interface: http://localhost:8080"
+echo "  - Controller (orchestration): http://localhost:8000"
 echo "  - MultiMeditron AI (multimodal): http://localhost:5009"
 echo "  - Orpheus TTS: http://localhost:5005"
 echo "  - Bark TTS: http://localhost:5008"
@@ -227,7 +315,8 @@ echo ""
 echo "Logs are available in the logs/ directory"
 echo ""
 echo "To check service status:"
-echo "  tail -f logs/webui.log"
+echo "  tail -f logs/controller.log"
+echo "  tail -f logs/webui-streamlit.log"
 echo "  tail -f logs/modelMultiMeditron.log"
 echo "  tail -f logs/modelOrpheus.log"
 echo "  tail -f logs/modelBark.log"

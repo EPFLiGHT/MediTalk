@@ -43,10 +43,14 @@ check_service() {
 # Check if services are running
 echo "Service Status:"
 echo "----------------------------------------"
-check_service "Web UI       " "http://localhost:8080/"
-check_service "Meditron AI  " "http://localhost:5006/health"
+check_service "Controller   " "http://localhost:8000/health"
+check_service "Streamlit UI " "http://localhost:8503/"
+check_service "MultiMeditron" "http://localhost:5009/health"
 check_service "Orpheus TTS  " "http://localhost:5005/health"
+check_service "Bark TTS     " "http://localhost:5008/health"
+check_service "CSM TTS      " "http://localhost:5010/health"
 check_service "Whisper ASR  " "http://localhost:5007/health"
+check_service "Qwen3-Omni   " "http://localhost:5014/health"
 
 echo ""
 echo "----------------------------------------"
@@ -67,7 +71,7 @@ echo "----------------------------------------"
 echo "Port Usage:"
 echo "----------------------------------------"
 
-for port in 8080 5006 5005 5007; do
+for port in 8000 8503 5009 5005 5008 5010 5007 5014; do
     if lsof -i :$port > /dev/null 2>&1; then
         echo -e "${GREEN}Port $port: In use${NC}"
     else

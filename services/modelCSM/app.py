@@ -10,6 +10,7 @@ import tempfile
 import hashlib
 from datetime import datetime
 import numpy as np
+import json
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -27,11 +28,13 @@ class ConversationSegment(BaseModel):
     audio_url: Optional[str] = None  # URL to audio file if available
 
 class TTSRequest(BaseModel):
-    text: str
+    conversation_path: str  # Path to conversation JSON file
     speaker: int = 0  # Speaker ID (0 or 1)
-    conversation_history: Optional[List[ConversationSegment]] = None
     max_audio_length_ms: int = 10000  # Per chunk
     output_filename: Optional[str] = None
+    # Optional fields for backward compatibility
+    text: Optional[str] = None
+    conversation_history: Optional[List[ConversationSegment]] = None
 
 def split_text_for_csm(text: str, max_chars: int = 200) -> list:
     """
@@ -203,8 +206,78 @@ def synthesize_speech(request: TTSRequest):
                 detail="CSM model not loaded. Please check HUGGINGFACE_TOKEN and model access permissions."
             )
         
-        logger.info(f"Synthesizing speech for: {request.text[:100]}...")
-        logger.info(f"Speaker: {request.speaker}, Context segments: {len(request.conversation_history) if request.conversation_history else 0}")
+        # Extract text and context from conversation JSON or use direct inputs
+        text_to_synthesize = None
+        conversation_context = []
+        
+        if request.conversation_path:
+            # Read conversation JSON
+            try:
+                with open(request.conversation_path, 'r') as f:
+                    conversation = json.load(f)
+                
+                messages = conversation.get('messages', [])
+                
+                # Find last assistant message for synthesis
+                for message in reversed(messages):
+                    if message.get('role') == 'assistant':
+                        for content_item in message.get('content', []):
+                            if content_item.get('type') == 'text':
+                                text_to_synthesize = content_item.get('data')
+                                break
+                        if text_to_synthesize:
+                            break
+                
+                if not text_to_synthesize:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No assistant text found in conversation"
+                    )
+                
+                # Build conversation context (last 3 turns for CSM)
+                # Extract message pairs with both text and audio
+                for message in messages[-6:]:  # Last 3 pairs (user + assistant)
+                    text_content = None
+                    audio_content = None
+                    
+                    for content_item in message.get('content', []):
+                        if content_item.get('type') == 'text':
+                            text_content = content_item.get('data')
+                        elif content_item.get('type') == 'audio':
+                            audio_content = content_item.get('data')
+                    
+                    # CSM uses speaker 0 for user, 1 for assistant
+                    speaker_id = 0 if message.get('role') == 'user' else 1
+                    
+                    if text_content and audio_content:
+                        conversation_context.append(ConversationSegment(
+                            text=text_content,
+                            speaker=speaker_id,
+                            audio_url=audio_content
+                        ))
+                
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Conversation file not found: {request.conversation_path}"
+                )
+            except json.JSONDecodeError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid JSON in conversation file: {str(e)}"
+                )
+        elif request.text:
+            # Use direct text and conversation_history for backward compatibility
+            text_to_synthesize = request.text
+            conversation_context = request.conversation_history or []
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either conversation_path or text must be provided"
+            )
+        
+        logger.info(f"Synthesizing speech for: {text_to_synthesize[:100]}...")
+        logger.info(f"Speaker: {request.speaker}, Context segments: {len(conversation_context)}")
         
         # Import Segment class for context
         from generator import Segment
@@ -212,11 +285,11 @@ def synthesize_speech(request: TTSRequest):
         # Build context from conversation history
         logger.info("Building conversation context...")
         context_segments = []
-        if request.conversation_history:
+        if conversation_context:
             # Limit to last 3 conversation turns to prevent context overflow
             # Each audio segment can be ~300-400 tokens (3 sec * 24000 Hz / 1920 samples per token)
-            recent_history = request.conversation_history[-3:]
-            logger.info(f"Using last {len(recent_history)} of {len(request.conversation_history)} conversation turns")
+            recent_history = conversation_context[-3:]
+            logger.info(f"Using last {len(recent_history)} of {len(conversation_context)} conversation turns")
             
             for seg in recent_history:
                 audio_tensor = None
@@ -252,7 +325,7 @@ def synthesize_speech(request: TTSRequest):
                     logger.info(f"  Skipped context (no audio): speaker={seg.speaker}, text='{seg.text[:50]}...'")
         
         # Split text into chunks if needed
-        text_chunks = split_text_for_csm(request.text, max_chars=200)
+        text_chunks = split_text_for_csm(text_to_synthesize, max_chars=200)
         logger.info(f"Split text into {len(text_chunks)} chunks for generation")
         
         # Generate audio for each chunk
@@ -344,7 +417,7 @@ def synthesize_speech(request: TTSRequest):
         else:
             # Create unique filename based on timestamp and text hash
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            text_hash = hashlib.md5(request.text.encode()).hexdigest()[:8]
+            text_hash = hashlib.md5(text_to_synthesize.encode()).hexdigest()[:8]
             output_filename = f"csm_{timestamp}_{text_hash}.wav"
         
         output_path = os.path.join(output_dir, output_filename)
@@ -365,7 +438,7 @@ def synthesize_speech(request: TTSRequest):
         return JSONResponse(content={
             "status": "success",
             "filename": output_filename,
-            "audio_file": output_path,
+            "service": "csm",
             "sample_rate": csm_generator.sample_rate,
             "message": message,
             "context_skipped": context_skipped
