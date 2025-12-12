@@ -92,109 +92,6 @@ class HuggingFaceDatasetFetcher(DatasetFetcher):
             raise
 
 
-class KaggleDatasetFetcher(DatasetFetcher):
-    """Fetcher for Kaggle datasets."""
-    
-    def __init__(
-        self,
-        dataset_id: str,
-        dataset_name: str,
-        base_dir: str = "../raw"
-    ):
-        super().__init__(base_dir)
-        self.dataset_id = dataset_id
-        self.dataset_name = dataset_name
-        self.local_dir = self.base_dir / dataset_name
-    
-    def unzip_dataset(self):
-        """Unzip the downloaded dataset files."""
-        import zipfile
-        
-        for item in self.local_dir.iterdir():
-            if item.suffix == '.zip':
-                print(f"Unzipping {item}...")
-                with zipfile.ZipFile(item, 'r') as zip_ref:
-                    zip_ref.extractall(self.local_dir)
-                item.unlink()
-                print(f"✓ Unzipped {item.name}")
-
-    def fetch(self) -> Path:
-        """Download the dataset from Kaggle."""
-        # Check if dataset already exists
-        if self.local_dir.exists() and any(self.local_dir.iterdir()):
-            print(f"✓ Dataset {self.dataset_name} already exists at {self.local_dir}")
-            return self.local_dir
-        
-        # IMPORTANT: Save token BEFORE importing kaggle
-        kaggle_token = os.getenv("KAGGLE_API_TOKEN")
-        if not kaggle_token:
-            raise ValueError("KAGGLE_API_TOKEN not found in environment variables")
-        
-        import kaggle
-        
-        # Create kaggle.json temporarily for authentication
-        kaggle_dir = Path.home() / ".config" / "kaggle"
-        kaggle_dir.mkdir(parents=True, exist_ok=True)
-        kaggle_json_path = kaggle_dir / "kaggle.json"
-        
-        # Write temporary kaggle.json with the token
-        import json
-        kaggle_config = {
-            "username": "",
-            "key": kaggle_token
-        }
-        
-        print(f"Downloading {self.dataset_id} to {self.local_dir}...")
-        
-        try:
-            # Write kaggle.json
-            with open(kaggle_json_path, 'w') as f:
-                json.dump(kaggle_config, f)
-            kaggle_json_path.chmod(0o600)
-            
-            # Authenticate and download
-            kaggle.api.authenticate()
-            self.local_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Download
-            kaggle.api.dataset_download_files(
-                self.dataset_id,
-                path=str(self.local_dir),
-                unzip=False,
-                quiet=False
-            )
-            
-            print(f"✓ Successfully downloaded {self.dataset_name}")
-
-            print("Unzipping dataset...")
-            self.unzip_dataset()
-            print("✓ Unzipping completed.")
-
-            print("Cleaning up duplicate folders if any...")
-            import shutil
-            folders = [d for d in self.local_dir.iterdir() if d.is_dir()]
-            if len(folders) > 1:
-                # Normalize names and find duplicates
-                seen = {}
-                for folder in folders:
-                    normalized = folder.name.lower()
-                    if normalized in seen:
-                        print(f"  Removing duplicate folder: {folder.name}")
-                        shutil.rmtree(folder)
-                    else:
-                        seen[normalized] = folder
-            return self.local_dir
-        
-        except Exception as e:
-            print(f"✗ Error downloading {self.dataset_name}: {e}")
-            raise
-        
-        finally:
-            # Clean up kaggle.json
-            if kaggle_json_path.exists():
-                kaggle_json_path.unlink()
-
-
 def main():
     """Main function to fetch both datasets."""
     
@@ -204,28 +101,16 @@ def main():
     # Check environment variables
     print("\nChecking environment variables...")
     hf_token = os.getenv("HF_DATA_TOKEN")
-    kaggle_token = os.getenv("KAGGLE_API_TOKEN")
     
     if not hf_token:
         print("✗ HF_DATA_TOKEN not set!")
     else:
         print(f"✓ HF_DATA_TOKEN set: {hf_token[:10]}...")
     
-    if not kaggle_token:
-        print("✗ KAGGLE_API_TOKEN not set!")
-    else:
-        print(f"✓ KAGGLE_API_TOKEN set: {kaggle_token[:10]}...\n")
-    
     # Fetch United-Syn-Med from HuggingFace
     hf_fetcher = HuggingFaceDatasetFetcher(
         repo_id="united-we-care/United-Syn-Med",
         dataset_name="United-Syn-Med"
-    )
-    
-    # Fetch Medical Speech Transcription and Intent from Kaggle
-    kaggle_fetcher = KaggleDatasetFetcher(
-        dataset_id="paultimothymooney/medical-speech-transcription-and-intent",
-        dataset_name="medical-speech-transcription-and-intent"
     )
     
     # Download datasets
@@ -234,12 +119,6 @@ def main():
         print(f"HuggingFace dataset saved to: {hf_path}\n")
     except Exception as e:
         print(f"Failed to fetch HuggingFace dataset: {e}\n")
-    
-    try:
-        kaggle_path = kaggle_fetcher.fetch()
-        print(f"Kaggle dataset saved to: {kaggle_path}\n")
-    except Exception as e:
-        print(f"Failed to fetch Kaggle dataset: {e}\n")
 
 
 if __name__ == "__main__":
