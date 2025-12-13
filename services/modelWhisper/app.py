@@ -141,11 +141,75 @@ async def transcribe_audio(
         logger.error(f"Transcription failed: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
-@app.post("/transcribe-stream")
-async def transcribe_stream():
-    """Future endpoint for real-time streaming transcription"""
-    # TODO: Implement streaming transcription
-    return {"message": "Streaming transcription not yet implemented"}
+class TranscribeFromPathRequest(BaseModel):
+    audio_path: str
+    language: Optional[str] = None
+
+@app.post("/transcribe_from_path", response_model=TranscriptionResponse)
+async def transcribe_from_path(request: TranscribeFromPathRequest):
+    """
+    Transcribe audio file from file system path
+    
+    Args:
+        request: Contains audio_path (file system path) and optional language
+    """
+    if whisper_model is None:
+        raise HTTPException(status_code=503, detail="Whisper model not loaded")
+    
+    audio_path = request.audio_path
+    language = request.language
+    
+    # Verify file exists
+    if not os.path.exists(audio_path):
+        logger.info(f"Audio file not found: {audio_path} from directory: {os.getcwd()}")
+        raise HTTPException(status_code=404, detail=f"Audio file not found: {audio_path}")
+    
+    debug_file_path = None
+    
+    try:
+        logger.info(f"Transcribing audio from path: {audio_path}")
+        
+        # If debug mode, save a copy for inspection
+        if DEBUG_AUDIO:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            debug_filename = f"whisper_input_{timestamp}.wav"
+            debug_file_path = os.path.join(DEBUG_DIR, debug_filename)
+            shutil.copy(audio_path, debug_file_path)
+            logger.info(f"Debug: Audio saved to {debug_file_path}")
+        
+        # Transcribe with Whisper using the loaded model
+        # Determine language mode
+        if language and language.lower() != "auto":
+            logger.info(f"Starting transcription with specified language: {language}")
+            transcribe_kwargs = {
+                "language": language.lower(),
+                "fp16": False
+            }
+        else:
+            logger.info("Starting transcription with auto language detection...")
+            transcribe_kwargs = {
+                "fp16": False
+            }
+        
+        result = whisper_model.transcribe(audio_path, **transcribe_kwargs)
+        
+        text = result["text"].strip()
+        detected_lang = result.get("language", "unknown")
+        
+        logger.info(f"Transcription completed (detected: {detected_lang}): '{text[:100]}...'")
+        
+        response = TranscriptionResponse(
+            text=text,
+            language=language if language else "auto",
+            detected_language=detected_lang,
+            confidence=None
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 @app.get("/debug-audio/{filename}")
 async def get_debug_audio(filename: str):
