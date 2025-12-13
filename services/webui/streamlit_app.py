@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import os
 from datetime import datetime
+import hashlib
 
 
 # Page configuration - Force light theme
@@ -259,6 +260,10 @@ ORPHEUS_URL = os.getenv("ORPHEUS_URL", "http://localhost:5005")
 BARK_URL = os.getenv("BARK_URL", "http://localhost:5008")
 CSM_URL = os.getenv("CSM_URL", "http://localhost:5010")
 
+# Audio output directory for webui recordings
+AUDIO_OUTPUT_DIR = "../../outputs/webui"
+os.makedirs(AUDIO_OUTPUT_DIR, exist_ok=True)
+
 
 def load_icon(icon_name, width=20, height=20, color="#667eea"):
     """Load and customize SVG icon"""
@@ -500,7 +505,7 @@ with st.sidebar:
     audio_bytes = st.audio_input("Click the mic to record your question")
     
     if audio_bytes:
-        import hashlib
+        
         audio_bytes.seek(0)
         audio_data = audio_bytes.read()
         audio_hash = hashlib.md5(audio_data).hexdigest()
@@ -514,73 +519,81 @@ with st.sidebar:
             
             with st.spinner("Transcribing your voice..."):
                 try:
-                    audio_bytes.seek(0)
-                    audio_data_for_whisper = audio_bytes.read()
+                    # Save audio to outputs/webui folder
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    audio_filename = f"user_recording_{timestamp}.wav"
+                    audio_filepath = os.path.join(AUDIO_OUTPUT_DIR, audio_filename)
                     
-                    files = {'audio_file': ('recording.wav', audio_data_for_whisper, 'audio/wav')}
-                    data_payload = {'language': whisper_language}
+                    audio_bytes.seek(0)
+                    audio_data_bytes = audio_bytes.read()
+                    
+                    with open(audio_filepath, 'wb') as f:
+                        f.write(audio_data_bytes)
+                    
+                    # Convert to absolute path for storage in conversation
+                    audio_filepath_absolute = os.path.abspath(audio_filepath)
+                    logger_info = f"Saved audio to: {audio_filepath_absolute}"
+                    
+                    # Send transcription request to controller with absolute file path
+                    payload = {
+                        "conversation_id": st.session_state.conversation_id,
+                        "audio_path": audio_filepath_absolute,
+                        "language": whisper_language if whisper_language != "auto" else None
+                    }
+                    
                     response = requests.post(
-                        f"{WHISPER_URL}/transcribe",
-                        files=files,
-                        data=data_payload,
+                        f"{CONTROLLER_URL}/transcribe_with_conversation",
+                        json=payload,
                         timeout=60
                     )
                     
                     if response.status_code == 200:
                         data = response.json()
-                        transcribed_text = data.get('text', '')
-                        detected_lang = data.get('detected_language', 'unknown')
-                        st.session_state.transcribed_text = transcribed_text
                         
-                        if detected_lang not in ['en', 'fr', 'english', 'french']:
-                            st.error(f"❌ Language not supported: {detected_lang.upper()}")
-                            st.error("Please try again in **English** or **French** only.")
-                            st.session_state.last_processed_audio = None
-                        else:
-                            normalized_lang = 'en' if detected_lang in ['en', 'english'] else 'fr'
-                            st.session_state.detected_language = normalized_lang
+                        # Store conversation ID if new
+                        if not st.session_state.conversation_id:
+                            st.session_state.conversation_id = data.get("conversation_id")
+                        
+                        # Check if transcription was successful
+                        if data.get("success"):
+                            transcribed_text = data.get('text', '')
+                            detected_lang = data.get('detected_language', 'unknown')
+                            
+                            # Store detected language for TTS
+                            st.session_state.detected_language = detected_lang
                             st.session_state.auto_switched_language = True
                             
-                            lang_display = "English" if normalized_lang == "en" else "French"
+                            lang_display = "English" if detected_lang == "en" else "French"
                             st.success(f"✓ Detected: {lang_display}")
+                            st.success(f"✓ Transcribed: {transcribed_text}")
                             
                             if tts_service in ["orpheus", "bark"] and generate_audio:
                                 st.info(f"TTS will use {lang_display}")
                             
-                            audio_url = None
-                            if tts_service == "csm":
-                                try:
-                                    files_csm = {'audio_file': ('user_recording.wav', audio_data_for_whisper, 'audio/wav')}
-                                    csm_response = requests.post(
-                                        f"{CSM_URL}/upload_context_audio",
-                                        files=files_csm,
-                                        timeout=30
-                                    )
-                                    
-                                    if csm_response.status_code == 200:
-                                        csm_data = csm_response.json()
-                                        audio_url = csm_data.get('relative_path')
-                                        st.success("✓ Voice recorded for context")
-                                except Exception as e:
-                                    st.warning(f"Could not upload voice for context: {str(e)}")
-                            
-                            user_message = {
+                            # Add transcribed message to local conversation history for display
+                            st.session_state.conversation_history.append({
                                 "role": "user",
                                 "content": transcribed_text
-                            }
+                            })
                             
-                            if audio_url:
-                                user_message["audio_url"] = audio_url
-                            
-                            st.session_state.conversation_history.append(user_message)
-                            st.success(f"✓ Transcribed: {transcribed_text}")
+                            # Trigger generation by setting flag
+                            st.session_state.transcription_completed = True
                             st.rerun()
+                        else:
+                            # Language not supported
+                            error_msg = data.get("error", "Unknown error")
+                            detected_lang = data.get('detected_language', 'unknown')
+                            st.error(f"❌ {error_msg}")
+                            st.error("Please try again in **English** or **French** only.")
+                            st.session_state.last_processed_audio = None
                     else:
                         st.error(f"Transcription failed: {response.status_code} - {response.text}")
+                        st.session_state.last_processed_audio = None
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
                     import traceback
                     st.error(traceback.format_exc())
+                    st.session_state.last_processed_audio = None
 
 
 # Main content area
@@ -649,12 +662,23 @@ if question and question.strip():
 
 # Check if need to generate a response
 if (
-    len(st.session_state.conversation_history) > 0 and
-    st.session_state.conversation_history[-1]['role'] == 'user' and
-    not st.session_state.get('processing', False)
+    (len(st.session_state.conversation_history) > 0 and
+     st.session_state.conversation_history[-1]['role'] == 'user' and
+     not st.session_state.get('processing', False)) or
+    (st.session_state.get('transcription_completed', False) and
+     not st.session_state.get('processing', False))
 ):
     st.session_state.processing = True
-    last_question = st.session_state.conversation_history[-1]['content']
+    
+    # Send user message only for text input flow
+    is_transcription_flow = st.session_state.get('transcription_completed', False)
+    
+    if is_transcription_flow:
+        # Clear the flag
+        st.session_state.transcription_completed = False
+        last_question = None  # Not used in this flow
+    else:
+        last_question = st.session_state.conversation_history[-1]['content']
     
     with st.spinner("Thinking... This may take a few minutes..."):
         try:
@@ -666,30 +690,58 @@ if (
                 del st.session_state.detected_language
             
             # Build ChatRequest payload
-            payload = {
-                "conversation_id": st.session_state.conversation_id, # None for the first message
-                "message": {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "data": last_question
-                        }
-                    ]
-                },
-                "use_stt": False,
-                "use_llm": True,
-                "use_tts": generate_audio,
-                "llm_service": "multimeditron",
-                "tts_service": tts_service,
-                "tts_language": tts_language,
-                "context": {
-                    "temperature": temperature,
-                    "max_length": max_length,
-                    "voice": voice,
-                    "generate_in_parallel": generate_in_parallel if tts_service == "orpheus" else False
+            if is_transcription_flow:
+                # For transcription flow: send empty message, controller uses last message from conversation
+                payload = {
+                    "conversation_id": st.session_state.conversation_id,
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "data": ""  # Empty - controller will use existing conversation
+                            }
+                        ]
+                    },
+                    "use_stt": False,
+                    "use_llm": True,
+                    "use_tts": generate_audio,
+                    "llm_service": "multimeditron",
+                    "tts_service": tts_service,
+                    "tts_language": tts_language,
+                    "context": {
+                        "temperature": temperature,
+                        "max_length": max_length,
+                        "voice": voice,
+                        "generate_in_parallel": generate_in_parallel if tts_service == "orpheus" else False
+                    }
                 }
-            }
+            else:
+                # For text input flow: send the user's typed message
+                payload = {
+                    "conversation_id": st.session_state.conversation_id,
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "data": last_question
+                            }
+                        ]
+                    },
+                    "use_stt": False,
+                    "use_llm": True,
+                    "use_tts": generate_audio,
+                    "llm_service": "multimeditron",
+                    "tts_service": tts_service,
+                    "tts_language": tts_language,
+                    "context": {
+                        "temperature": temperature,
+                        "max_length": max_length,
+                        "voice": voice,
+                        "generate_in_parallel": generate_in_parallel if tts_service == "orpheus" else False
+                    }
+                }
             
             response = requests.post(endpoint, json=payload, timeout=600)
             

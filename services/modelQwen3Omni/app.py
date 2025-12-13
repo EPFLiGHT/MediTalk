@@ -201,9 +201,15 @@ def load_conversation_audios(conversation_data, max_context_turns=3, verbose=Tru
 
         for content_item in turn["content"]:
             if content_item["type"] == "audio":
-                # Path is stored as /outputs/service/filename.wav, convert to absolute path
-                relative_path = content_item["data"].lstrip("/")  # Remove leading slash
-                audio_path = os.path.join(PROJECT_ROOT, relative_path)
+                # Handle both absolute and relative paths
+                stored_path = content_item["data"]
+                if os.path.isabs(stored_path):
+                    # Path is already absolute, use it directly
+                    audio_path = stored_path
+                else:
+                    # Path is relative (e.g., /outputs/service/filename.wav), convert to absolute
+                    relative_path = stored_path.lstrip("/")  # Remove leading slash
+                    audio_path = os.path.join(PROJECT_ROOT, relative_path)
                 
                 if verbose:
                     logger.info(f"Loading audio: {content_item['data']} -> {audio_path}")

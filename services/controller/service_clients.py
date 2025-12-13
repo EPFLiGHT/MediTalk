@@ -19,7 +19,7 @@ class ServiceClient:
         self,
         base_url: str,
         service_name: str,
-        timeout: float = 30.0, # seconds
+        timeout: float = 600.0, # seconds
         max_retries: int = 2,
         verbose: bool = False
     ):
@@ -249,9 +249,11 @@ async def call_stt(
     
 
     return await client.post(
-        "/transcribe",
-        audio=audio_path,
-        **kwargs
+        "/transcribe_from_path",
+        data={
+            "audio_path": audio_path,
+            **kwargs
+        }
     )
 
 

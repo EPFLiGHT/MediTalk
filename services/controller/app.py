@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, List
+import uvicorn
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,8 @@ from data_models import (
     SynthesizeResponse,
     TranscribeRequest,
     TranscribeResponse,
+    TranscribeWithConversationRequest,
+    TranscribeWithConversationResponse,
 )
 from service_clients import ServiceRegistry, call_multimeditron, call_stt, call_tts
 
@@ -250,6 +253,100 @@ async def transcribe(request: TranscribeRequest):
         )
 
 
+@app.post("/transcribe_with_conversation", response_model=TranscribeWithConversationResponse)
+async def transcribe_with_conversation(request: TranscribeWithConversationRequest):
+    """Transcribe audio and save to conversation."""
+    # Get or create conversation
+    if request.conversation_id:
+        conversation = conversation_manager.get_conversation(request.conversation_id)
+        if not conversation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Conversation {request.conversation_id} not found"
+            )
+    else:
+        conversation = conversation_manager.create_conversation()
+    
+    conversation_id = conversation.id
+    
+    # Call Whisper service
+    whisper_client = service_registry.get("whisper")
+    if not whisper_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Whisper service not available"
+        )
+    
+    try:
+        logger.info(f"🎤 Transcribing audio for conversation {conversation_id}: {request.audio_path}")
+        
+        result = await call_stt(
+            whisper_client,
+            request.audio_path,
+            language=request.language,
+            verbose=VERBOSE
+        )
+        
+        text = result.get("text", "")
+        detected_lang = result.get("detected_language", "unknown")
+        
+        logger.info(f"✅ Transcription completed (detected: {detected_lang}): '{text[:50]}...'")
+        
+        # Check if language is supported (English or French only)
+        if detected_lang.lower() not in ['en', 'fr', 'english', 'french']:
+            logger.warning(f"❌ Unsupported language detected: {detected_lang}")
+            return TranscribeWithConversationResponse(
+                conversation_id=conversation_id,
+                text="",
+                language=request.language,
+                detected_language=detected_lang,
+                success=False,
+                error=f"Language not supported: {detected_lang}. Please use English or French only."
+            )
+        
+        # Save to conversation (audio path + transcription text)
+        # Normalize language
+        normalized_lang = 'en' if detected_lang.lower() in ['en', 'english'] else 'fr'
+        
+        user_message = ConversationMessage(
+            role=MessageRole.USER,
+            content=[
+                MessageContent(
+                    type="audio",
+                    data=request.audio_path,
+                    metadata={"source": "user_recording"}
+                ),
+                MessageContent(
+                    type="text",
+                    data=text,
+                    metadata={"source": "whisper", "detected_language": normalized_lang}
+                )
+            ],
+            service_metadata={"stt_service": "whisper"}
+        )
+        
+        conversation_manager.add_message(conversation_id, user_message, verbose=VERBOSE)
+        
+        logger.info(f"💾 Saved transcription to conversation {conversation_id}")
+        
+        return TranscribeWithConversationResponse(
+            conversation_id=conversation_id,
+            text=text,
+            language=request.language,
+            detected_language=normalized_lang,
+            success=True,
+            error=None
+        )
+    
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}")
+        # Don't save anything on error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Transcription failed: {str(e)}"
+        )
+
+
 @app.post("/synthesize", response_model=SynthesizeResponse)
 async def synthesize(request: SynthesizeRequest):
     """
@@ -397,8 +494,14 @@ async def chat(request: ChatRequest):
                     processing_info["services_called"].append("whisper")
                     processing_info["stt_result"] = stt_result
         
-        # Store user message (saves to JSON file)
-        conversation_manager.add_message(conversation_id, user_message, verbose=VERBOSE)
+        # Store user message (saves to JSON file) --> skip if all text content is empty
+        text_contents = [c.data for c in user_message.content if c.type == "text"]
+        has_non_empty_text = any(text.strip() for text in text_contents if isinstance(text, str))
+        
+        if has_non_empty_text:
+            conversation_manager.add_message(conversation_id, user_message, verbose=VERBOSE)
+        else:
+            logger.info(f"/!\ Skipping user message save (empty text content)")
         
         # Step 3: Generate LLM response (if enabled)
         assistant_text = ""
@@ -531,9 +634,7 @@ async def chat(request: ChatRequest):
             detail=f"Chat pipeline failed: {str(e)}"
         )
 
-if __name__ == "__main__":
-    import uvicorn
-    
+if __name__ == "__main__":    
     port = int(os.getenv("CONTROLLER_PORT", "8000"))
     
     uvicorn.run(
