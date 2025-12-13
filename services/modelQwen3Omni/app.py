@@ -208,7 +208,7 @@ def load_conversation_audios(conversation_data, max_context_turns=3, verbose=Tru
                     audio_path = stored_path
                 else:
                     # Path is relative (e.g., /outputs/service/filename.wav), convert to absolute
-                    relative_path = stored_path.lstrip("/")  # Remove leading slash
+                    relative_path = stored_path.lstrip("/")
                     audio_path = os.path.join(PROJECT_ROOT, relative_path)
                 
                 if verbose:

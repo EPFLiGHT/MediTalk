@@ -1,0 +1,23 @@
+# Whisper Benchmark Requirements
+
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+pyyaml>=6.0
+requests>=2.31.0
+tqdm>=4.65.0
+
+# Metrics calculation
+jiwer>=3.0.0  # Word Error Rate (WER) and Character Error Rate (CER)
+
+# Audio processing (for duration calculation)
+# Uncomment if you want to calculate actual audio durations
+# mutagen>=1.47.0
+# librosa>=0.10.0
+
+# Visualization (static plots)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Visualization (interactive plots - optional but recommended)
+plotly>=5.18.0

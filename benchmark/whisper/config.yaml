@@ -1,0 +1,21 @@
+# Simple Whisper Benchmark Configuration
+
+whisper_service:
+  url: "http://localhost:5007"
+
+models:
+  sizes:
+    - tiny
+    - base
+    - small
+    - medium
+
+data:
+  metadata_path: "../../data/processed/USM/metadata.csv"
+  base_path: "../../"
+  sample_size: 100
+  sampling_strategy: "stratified"  # or "random"
+  random_seed: 42
+
+output:
+  results_dir: "results"
