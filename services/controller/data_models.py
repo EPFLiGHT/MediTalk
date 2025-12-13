@@ -96,6 +96,23 @@ class TranscribeResponse(BaseModel):
     service_metadata: Optional[Dict[str, Any]] = None
 
 
+class TranscribeWithConversationRequest(BaseModel):
+    """Transcription request that saves to conversation"""
+    conversation_id: Optional[str] = None  # if None, creates new conversation
+    audio_path: str  # File system path to audio file
+    language: Optional[str] = None
+
+
+class TranscribeWithConversationResponse(BaseModel):
+    """Transcription result with conversation info"""
+    conversation_id: str
+    text: str
+    language: Optional[str] = None
+    detected_language: Optional[str] = None
+    success: bool
+    error: Optional[str] = None  # Set if transcription failed (e.g., unsupported language)
+
+
 class SynthesizeRequest(BaseModel):
     """Direct TTS request (bypasses conversation storage)"""
     text: str

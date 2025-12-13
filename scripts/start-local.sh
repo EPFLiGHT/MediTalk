@@ -18,7 +18,6 @@ declare -A SERVICE_PORTS=(
     ["modelWhisper"]="5007"
     ["modelMultiMeditron"]="5009"
     ["modelQwen3Omni"]="5014"
-    ["webui"]="8080"
     ["webui-streamlit"]="8503"
     ["controller"]="8000"
 )
