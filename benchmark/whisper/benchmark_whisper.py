@@ -137,7 +137,7 @@ class WhisperBenchmark:
         with open(self.results_dir / f"{model_size}_summary.json", 'w') as f:
             json.dump(summary, f, indent=2)
         
-        logger.info(f"✅ {model_size} complete - WER: {summary['wer']['mean']:.4f}")
+        logger.info(f"Whisper {model_size} complete - WER: {summary['wer']['mean']:.4f}")
         return summary
     
     def run(self):
@@ -160,7 +160,7 @@ class WhisperBenchmark:
         # Benchmark each model
         all_results = {}
         for model_size in self.model_sizes:
-            logger.info(f"\n🔄 Prepare Whisper service with model '{model_size}'")
+            logger.info(f"\nPlease prepare Whisper service with model '{model_size}'")
             logger.info("   Then press Enter to continue...")
             input()
             
@@ -168,11 +168,11 @@ class WhisperBenchmark:
             try:
                 response = requests.get(f"{self.whisper_url}/health", timeout=5)
                 if response.status_code != 200:
-                    logger.error(f"❌ Service not healthy, skipping {model_size}")
+                    logger.error(f"Service not healthy, skipping {model_size}")
                     continue
-                logger.info(f"✅ Service ready")
+                logger.info(f"Service ready")
             except:
-                logger.error(f"❌ Service not responding, skipping {model_size}")
+                logger.error(f"Service not responding, skipping {model_size}")
                 continue
             
             # Run benchmark
@@ -183,13 +183,12 @@ class WhisperBenchmark:
         self._generate_reports(all_results)
         
         logger.info("\n" + "="*60)
-        logger.info("✅ BENCHMARK COMPLETE")
-        logger.info(f"📁 Results: {self.results_dir}")
+        logger.info("BENCHMARK COMPLETE")
+        logger.info(f"Results: {self.results_dir}")
         logger.info("="*60)
     
     def _generate_reports(self, all_results):
         """Generate comparison reports and visualizations."""
-        # Save comparison
         comparison = {
             'timestamp': datetime.now().isoformat(),
             'models_tested': list(all_results.keys()),
@@ -198,7 +197,6 @@ class WhisperBenchmark:
         with open(self.results_dir / "model_comparison.json", 'w') as f:
             json.dump(comparison, f, indent=2)
         
-        # Print summary
         logger.info("\n" + "="*60)
         logger.info("RESULTS SUMMARY")
         logger.info("="*60)
@@ -216,7 +214,7 @@ class WhisperBenchmark:
         try:
             from visualization.visualize import generate_all_plots
             generate_all_plots(self.results_dir)
-            logger.info("✅ Visualizations generated")
+            logger.info("Visualizations generated")
         except Exception as e:
             logger.error(f"Visualizations failed: {e}")
 

@@ -1,0 +1,28 @@
+# TTS Benchmark Configuration
+
+# Dataset
+dataset:
+  metadata_path: "../../data/processed/USM/metadata.csv"
+  sample_size: 5
+  sampling_strategy: "stratified"  # or "random"
+  random_seed: 42
+
+# TTS Models to benchmark
+tts_models:
+  - name: "orpheus"
+    url: "http://localhost:5005"
+  # - name: "bark"
+  #   url: "http://localhost:5008"
+  # - name: "csm"
+  #   url: "http://localhost:5010"
+  # - name: "qwen3omni"
+  #   url: "http://localhost:5014"
+
+
+# Whisper ASR (for round-trip evaluation)
+whisper_service:
+  url: "http://localhost:5007"
+
+# Output
+results_dir: "results"
+save_audio: true  # Whether to save synthesized audio files or not after the benchmark

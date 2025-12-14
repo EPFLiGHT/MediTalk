@@ -11,6 +11,14 @@ if [ ! -f "benchmark_whisper.py" ]; then
     exit 1
 fi
 
+# Check if config file is provided
+if [ ! -f "config.yaml" ]; then
+    echo "❌ Error: Config file 'config.yaml' not found in the current directory"
+    echo "Please provide a valid config file (cf README.md)."
+    echo "Tip: You can copy from 'config_example.yaml'."
+    exit 1
+fi
+
 # Create virtual environment if it doesn't exist
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
@@ -44,8 +52,16 @@ if [ $? -eq 0 ]; then
     
     # Run benchmark
     echo "Starting benchmark..."
+    echo "=================================="
     echo ""
+
     python benchmark_whisper.py
+
+    echo ""
+    echo "=================================="
+    echo "Benchmark complete!"
+    echo "Results saved to: results/"
+    echo "=================================="
     
 else
     echo "❌ Whisper service is not running"
