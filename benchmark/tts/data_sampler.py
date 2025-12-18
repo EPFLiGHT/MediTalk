@@ -6,10 +6,12 @@ import pandas as pd
 import logging
 import sys
 from pathlib import Path
+import importlib.util
 
-# Import shared data sampler
-sys.path.insert(0, str(Path(__file__).parent.parent / 'shared'))
-import data_sampler as shared_sampler
+shared_path = Path(__file__).parent.parent / 'shared' / 'data_sampler.py'
+spec = importlib.util.spec_from_file_location("shared_data_sampler", shared_path)
+shared_sampler = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(shared_sampler)
 
 logger = logging.getLogger(__name__)
 
@@ -34,29 +36,25 @@ def create_benchmark_sample(
     Returns:
         DataFrame with columns: sample_id, text, text_length
     """
-    # Use shared sampler
+
     df = shared_sampler.create_benchmark_sample(
         metadata_path=metadata_path,
         sample_size=sample_size,
-        output_path=None,  # We'll handle saving ourselves
+        output_path=None, # saving handled here, not in shared
         strategy=strategy,
         seed=seed,
         text_column='transcription'
     )
     
-    # Rename for TTS clarity
     if 'transcription' in df.columns:
         df = df.rename(columns={'transcription': 'text'})
     
-    # Add sample IDs if not present
     if 'sample_id' not in df.columns:
         df.insert(0, 'sample_id', range(len(df)))
     
-    # Add text length column for analysis
     if 'text_length' not in df.columns:
         df['text_length'] = df['text'].str.len()
     
-    # Keep only necessary columns
     df = df[['sample_id', 'text', 'text_length']].copy()
     
     logger.info(f"TTS sample created: {len(df)} texts")

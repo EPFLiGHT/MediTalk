@@ -46,3 +46,9 @@ echo "=================================="
 echo ""
 
 python3 benchmark_tts.py
+
+
+if [ -f "benchmark.log" ]; then
+    rm "benchmark.log"
+fi
+

@@ -18,6 +18,7 @@ declare -A SERVICE_PORTS=(
     ["modelWhisper"]="5007"
     ["modelMultiMeditron"]="5009"
     ["modelQwen3Omni"]="5014"
+    ["modelNisqa"]="8006"
     ["webui-streamlit"]="8503"
     ["controller"]="8000"
 )
@@ -282,6 +283,9 @@ start_service "modelCSM" 5010
 # 5. Start Whisper ASR
 start_service "modelWhisper" 5007
 
+# 5b. Start NISQA-TTS MOS prediction
+start_service "modelNisqa" 8006
+
 # Give TTS and ASR a moment to initialize
 sleep 3
 
@@ -310,6 +314,7 @@ echo "  - Bark TTS: http://localhost:5008"
 echo "  - CSM TTS: http://localhost:5010"
 echo "  - Whisper ASR: http://localhost:5007"
 echo "  - Qwen3-Omni AI: http://localhost:5014"
+echo "  - NISQA MOS Prediction: http://localhost:8006"
 echo ""
 echo "Logs are available in the logs/ directory"
 echo ""
@@ -322,6 +327,7 @@ echo "  tail -f logs/modelBark.log"
 echo "  tail -f logs/modelCSM.log"
 echo "  tail -f logs/modelWhisper.log"
 echo "  tail -f logs/modelQwen3Omni.log"
+echo "  tail -f logs/modelNisqa.log"
 echo ""
 echo "To stop all services:"
 echo "  ./scripts/stop-local.sh"

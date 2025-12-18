@@ -1,5 +1,5 @@
 """
-ASR Client - Whisper service wrapper for round-trip evaluation
+NISQA Client - NISQA-TTS service wrapper for MOS prediction
 """
 
 import requests
@@ -10,48 +10,47 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
-class ASRClient:
-    """Simple client for Whisper ASR service."""
+class NISQAClient:
+    """Simple client for NISQA-TTS quality prediction service."""
     
-    def __init__(self, whisper_url: str, timeout: int = 600):
+    def __init__(self, nisqa_url: str, timeout: int = 60):
         """
-        Initialize ASR client.
+        Initialize NISQA client.
         
         Args:
-            whisper_url: Whisper service URL (e.g., 'http://localhost:5007')
-            timeout: Request timeout in seconds (default: 600s)
+            nisqa_url: NISQA service URL (e.g., 'http://localhost:8006')
+            timeout: Request timeout in seconds (default: 60s)
         """
-        self.whisper_url = whisper_url.rstrip('/')
+        self.nisqa_url = nisqa_url.rstrip('/')
         self.timeout = timeout
-        logger.info(f"Initialized ASR client at {whisper_url}")
+        logger.info(f"Initialized NISQA client at {nisqa_url}")
         
     def health_check(self) -> bool:
         """
-        Check if Whisper service is healthy.
+        Check if NISQA service is healthy.
         
         Returns:
             True if service is responding, False otherwise
         """
         try:
-            response = requests.get(f"{self.whisper_url}/health", timeout=5)
+            response = requests.get(f"{self.nisqa_url}/health", timeout=5)
             if response.status_code == 200:
-                logger.info("✓ Whisper ASR service is healthy")
+                logger.info("✓ NISQA service is healthy")
                 return True
         except Exception as e:
-            logger.error(f"✗ Whisper ASR service health check failed: {e}")
+            logger.error(f"✗ NISQA service health check failed: {e}")
         return False
     
-    def transcribe_file(self, audio_path: str) -> Dict:
+    def predict_quality(self, audio_path: str) -> Dict:
         """
-        Transcribe audio file.
+        Predict MOS quality score for audio file.
         
         Args:
             audio_path: Absolute path to audio file
             
         Returns:
             {
-                'text': str,           # Transcribed text
-                'language': str,       # Detected language
+                'mos': float,          # Overall MOS score (1-5)
                 'latency': float,      # Processing time
                 'success': bool,
                 'error': str or None
@@ -60,9 +59,8 @@ class ASRClient:
         start_time = time.time()
         
         try:
-            # Send audio path to Whisper service (not file upload, just the path)
             response = requests.post(
-                f"{self.whisper_url}/transcribe_from_path",
+                f"{self.nisqa_url}/predict_from_path",
                 json={'audio_path': audio_path},
                 timeout=self.timeout
             )
@@ -72,18 +70,16 @@ class ASRClient:
             if response.status_code == 200:
                 result = response.json()
                 return {
-                    'text': result.get('text', ''),
-                    'language': result.get('language', 'unknown'),
+                    'mos': result.get('mos', 0.0),
                     'latency': latency,
                     'success': True,
                     'error': None
                 }
             else:
                 error_msg = f"HTTP {response.status_code}: {response.text}"
-                logger.error(f"ASR transcription failed: {error_msg}")
+                logger.error(f"NISQA prediction failed: {error_msg}")
                 return {
-                    'text': '',
-                    'language': 'unknown',
+                    'mos': 0.0,
                     'latency': latency,
                     'success': False,
                     'error': error_msg
@@ -92,10 +88,9 @@ class ASRClient:
         except requests.Timeout:
             latency = time.time() - start_time
             error_msg = f"Request timeout after {self.timeout}s"
-            logger.error(f"ASR transcription timeout: {error_msg}")
+            logger.error(f"NISQA prediction timeout: {error_msg}")
             return {
-                'text': '',
-                'language': 'unknown',
+                'mos': 0.0,
                 'latency': latency,
                 'success': False,
                 'error': error_msg
@@ -103,11 +98,10 @@ class ASRClient:
             
         except Exception as e:
             latency = time.time() - start_time
-            error_msg = str(e)
-            logger.error(f"ASR transcription error: {error_msg}")
+            error_msg = f"Unexpected error: {str(e)}"
+            logger.error(f"NISQA prediction failed: {error_msg}")
             return {
-                'text': '',
-                'language': 'unknown',
+                'mos': 0.0,
                 'latency': latency,
                 'success': False,
                 'error': error_msg

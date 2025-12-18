@@ -5,8 +5,11 @@ This folder contains all the operational scripts for MediTalk.
 ## Usage
 
 ```bash
-# From project root:
+# Go to project root:
 cd /mloscratch/users/teissier/MediTalk
+
+# Setup services
+./scripts/setup-local.sh
 
 # Start services
 ./scripts/start-local.sh

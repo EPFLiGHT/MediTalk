@@ -113,3 +113,10 @@ data/processed/*
 !data/processed/.gitkeep
 data/venv/
 data/.env
+
+# Benchmark folder
+benchmark/tts/results/*_*_orpheus/*
+benchmark/tts/results/*_*_bark/*
+benchmark/tts/results/*_*_csm/*
+benchmark/tts/results/*_*_qwen3omni/*
+benchmark/tts/results/*/audio_samples/*

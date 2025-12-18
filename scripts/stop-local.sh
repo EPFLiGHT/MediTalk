@@ -21,6 +21,7 @@ declare -A SERVICES=(
     ["modelWhisper"]="modelWhisper"
     ["modelOrpheus"]="modelOrpheus"
     ["modelQwen3Omni"]="modelQwen3Omni"
+    ["modelNisqa"]="modelNisqa"
     ["controller"]="controller"
 )
 

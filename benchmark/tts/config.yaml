@@ -3,7 +3,7 @@
 # Dataset
 dataset:
   metadata_path: "../../data/processed/USM/metadata.csv"
-  sample_size: 5
+  sample_size: 10
   sampling_strategy: "stratified"  # or "random"
   random_seed: 42
 
@@ -11,17 +11,22 @@ dataset:
 tts_models:
   - name: "orpheus"
     url: "http://localhost:5005"
-  # - name: "bark"
-  #   url: "http://localhost:5008"
-  # - name: "csm"
-  #   url: "http://localhost:5010"
-  # - name: "qwen3omni"
-  #   url: "http://localhost:5014"
+  - name: "bark"
+    url: "http://localhost:5008"
+  - name: "csm"
+    url: "http://localhost:5010"
+  - name: "qwen3omni"
+    url: "http://localhost:5014"
 
 
 # Whisper ASR (for round-trip evaluation)
 whisper_service:
   url: "http://localhost:5007"
+
+# NISQA-TTS (for MOS quality prediction) - OPTIONAL
+nisqa_service:
+  enabled: true  # Set to false to skip MOS evaluation
+  url: "http://localhost:8006"
 
 # Output
 results_dir: "results"

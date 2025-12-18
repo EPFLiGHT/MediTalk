@@ -8,7 +8,7 @@ dataset:
   sampling_strategy: "stratified"  # or "random"
   random_seed: 42
 
-# TTS Models to benchmark
+# TTS Models to benchmark (comment out / remove to skip a model)
 tts_models:
   - name: "orpheus"
     url: "http://localhost:5005"

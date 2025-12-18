@@ -12,6 +12,7 @@ import json
 from copy import deepcopy
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional
 from tqdm import tqdm
 import soundfile as sf
 
@@ -47,6 +48,7 @@ class Qwen3OmniTTSRequest(BaseModel):
     conversation_path: str  # Full path to conversation JSON file
     speaker: str = "Ethan" # Options: "Ethan", "Chelsie", "Aiden"
     conversation_json_file: str = None  # Deprecated - for backward compatibility
+    output_filename: Optional[str] = None  # Optional: full path where to save the audio file
 
 @app.on_event("startup")
 async def startup_event():
@@ -141,11 +143,11 @@ async def synthesize_speech(request: Qwen3OmniTTSRequest):
         compute_request_duration(verbose=VERBOSE)
 
         # Post-process and save outputs
-        output_filename = response_postprocessing(generated_ids, generated_wav, inputs)
+        output_path = response_postprocessing(generated_ids, generated_wav, inputs, output_filename=request.output_filename)
 
         return JSONResponse(content={
             "status": "success",
-            "filename": output_filename,
+            "filename": output_path,
             "service": "qwen3omni",
             "message": "Synthesis completed successfully."
         })
@@ -387,7 +389,7 @@ def generate_qwen3omni_response(inputs, speaker="Ethan", verbose=True):
 
     return generated_ids, generated_wav
 
-def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
+def response_postprocessing(generated_ids, generated_wav, inputs, output_filename=None, verbose=True):
     """
     Post-process the generated text and audio responses.
 
@@ -395,9 +397,10 @@ def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
         generated_ids (torch.Tensor): Generated token IDs from the model
         generated_wav (torch.Tensor): Generated waveform from the model
         inputs (dict): Original inputs used for generation
+        output_filename (str, optional): Full path where to save the audio file. If None, uses default location.
         
     Returns:
-        str: The filename of the generated audio file
+        str: The full path of the generated audio file
     """
     global qwen3omni_processor, curr_request_end_timestamp
 
@@ -426,8 +429,13 @@ def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
     
     # Save generated audio
     try:
-        audio_filename = f"qwen3omni_{curr_request_end_timestamp}.wav"
-        output_audio_path = os.path.join(OUTPUT_AUDIO_DIR, audio_filename)
+        # Use provided output_filename if available, otherwise use default naming
+        if output_filename:
+            output_audio_path = output_filename
+        else:
+            audio_filename = f"qwen3omni_{curr_request_end_timestamp}.wav"
+            output_audio_path = os.path.join(OUTPUT_AUDIO_DIR, audio_filename)
+        
         if verbose:
             logger.info(f"Saving generated audio to: {output_audio_path}")
         
@@ -440,7 +448,7 @@ def response_postprocessing(generated_ids, generated_wav, inputs, verbose=True):
         if verbose:
             logger.info(f"Generated audio saved to: {output_audio_path}")
         
-        return audio_filename
+        return output_audio_path
 
     except Exception as e:
         raise RuntimeError(f"Error during response audio saving: {e}")

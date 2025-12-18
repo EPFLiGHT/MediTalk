@@ -1,74 +1,59 @@
-# Bark TTS Service
+# Bark Service
 
-Alternative Text-to-Speech service using Suno AI's Bark model.
+Text-to-speech service using Suno AI Bark model with multilingual voice presets.
 
-## Features
+## Setup
 
-- **Multilingual support** - English, Spanish, French, German, Chinese, etc.
-- **Multiple voice presets** - 10 English voices + international voices  
-- **High quality** - Natural sounding speech with emotional tones
-- **Open source** - No API keys needed
+```bash
+cd services/modelBark
 
-## API Endpoints
+# Create virtual environment and install dependencies
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-### Health Check
+## Usage
+
+Start the service on port 5008:
+
+```bash
+./venv/bin/python app.py
+```
+
+First run downloads models (approximately 5GB, may take 5-10 minutes).
+
+## API
+
+**Health Check:**
 ```bash
 curl http://localhost:5008/health
 ```
 
-### Synthesize Speech
+**Generate speech:**
 ```bash
 curl -X POST http://localhost:5008/synthesize \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "Hello, this is Bark TTS speaking!",
-    "voice": "v2/en_speaker_6"
+    "text": "Hello, this is a test.",
+    "voice": "v2/en_speaker_6",
+    "output_filename": "output.wav"
   }'
 ```
 
-### List Available Voices
+**Response:**
+```json
+{
+  "audio_file": "/path/to/output.wav",
+  "duration": 2.3,
+  "generation_time": 1.8
+}
+```
+
+**List voices:**
 ```bash
 curl http://localhost:5008/voices
 ```
 
-## Voice Presets
+Supports 10+ voices in multiple languages (en, es, fr, de, zh, etc.).
 
-**English:**
-- `v2/en_speaker_0` through `v2/en_speaker_9`
-
-**Other Languages:**
-- `v2/de_speaker_0` (German)
-- `v2/es_speaker_0` (Spanish)  
-- `v2/fr_speaker_0` (French)
-- `v2/zh_speaker_0` (Chinese)
-- And more!
-
-## Architecture
-
-- **Port:** 5008
-- **Output directory:** `../../outputs/bark/`
-- **Model cache:** `~/.cache/suno/bark_v0/`
-
-## Comparison with Orpheus
-
-| Feature | Orpheus | Bark |
-|---------|---------|------|
-| Port | 5005 | 5008 |
-| Model size | ~3B parameters | Mixed (1.3B text, 350M audio) |
-| Voices | 1 (Tara) | 10+ (multilingual) |
-| Quality | Medical-focused | General purpose |
-| Setup | Requires HF token | No authentication |
-| Languages | English | 13+ languages |
-
-## Notes
-
-- First run downloads ~5GB of models (can take 5-10 minutes)
-- Models are cached in `~/.cache/suno/bark_v0/`
-- Works entirely offline after initial download
-- GPU recommended but CPU works (slower)
-
-## Integration
-
-Both Orpheus and Bark run simultaneously. Choose based on your needs:
-- **Orpheus:** Medical domain, single consistent voice
-- **Bark:** Multiple voices, multilingual, general purpose

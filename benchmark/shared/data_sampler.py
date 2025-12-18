@@ -104,7 +104,7 @@ def _stratified_sample(df: pd.DataFrame, n: int, seed: int, text_column: str) ->
             continue
         bin_df = df[df['length_bin'] == bin_idx]
         sample_size = min(samples_per_bin, len(bin_df))
-        sampled = bin_df.sample(n=sample_size, random_state=seed + int(bin_idx))
+        sampled = bin_df.sample(n=sample_size, random_state=seed + hash(str(bin_idx)) % 1000)
         sampled_dfs.append(sampled)
     
     result = pd.concat(sampled_dfs, ignore_index=True)

@@ -84,7 +84,7 @@ mkdir -p inputs/controller/conversations
 echo "✓ Created output directories"
 
 # Setup virtual environments for each service
-services=("controller" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper" "modelQwen3Omni" "webui")
+services=("controller" "modelMultiMeditron" "modelOrpheus" "modelBark" "modelCSM" "modelWhisper" "modelNisqa" "modelQwen3Omni" "webui")
 
 for service in "${services[@]}"; do
     echo ""
@@ -99,6 +99,21 @@ for service in "${services[@]}"; do
         python3 -m venv "$venv_dir"
     else
         echo "  Virtual environment already exists"
+    fi
+    
+    # Special handling for modelNisqa - clone NISQA repo if needed
+    if [ "$service" == "modelNisqa" ]; then
+        nisqa_repo="$service_dir/NISQA"
+        if [ ! -d "$nisqa_repo" ]; then
+            echo "  Cloning NISQA repository..."
+            cd "$service_dir"
+            git clone https://github.com/gabrielmittag/NISQA.git
+            cd ../..
+            echo "  ✓ NISQA cloned"
+            echo "/!\ See README.md for additional setup instructions for NISQA"
+        else
+            echo "  NISQA repository already exists"
+        fi
     fi
     
     # Activate and install requirements

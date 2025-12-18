@@ -1,0 +1,30 @@
+# NISQA-TTS Service Requirements
+
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.4.2
+
+# Audio processing
+soundfile==0.12.1
+librosa==0.10.1
+
+# Deep learning
+torch>=2.0.0
+torchvision
+torchaudio
+
+# Scientific computing
+numpy
+scipy
+pandas
+matplotlib
+scikit-learn
+seaborn
+
+# Utilities
+tqdm
+pyyaml
+numba
+requests
+
