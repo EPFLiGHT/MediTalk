@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-Start the service on port 8001:
+Start the service on port 8000:
 
 ```bash
 ./venv/bin/python app.py
@@ -25,17 +25,17 @@ Start the service on port 8001:
 
 **Health Check:**
 ```bash
-curl http://localhost:8001/health
+curl http://localhost:8000/health
 ```
 
 **Create conversation:**
 ```bash
-curl -X POST http://localhost:8001/conversations
+curl -X POST http://localhost:8000/conversations
 ```
 
 **Chat (text):**
 ```bash
-curl -X POST http://localhost:8001/chat \
+curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{
     "conversation_id": "conv_123",
@@ -45,7 +45,7 @@ curl -X POST http://localhost:8001/chat \
 
 **Transcribe & respond:**
 ```bash
-curl -X POST http://localhost:8001/transcribe_and_chat \
+curl -X POST http://localhost:8000/transcribe_and_chat \
   -F "audio=@input.wav" \
   -F "conversation_id=conv_123"
 ```
