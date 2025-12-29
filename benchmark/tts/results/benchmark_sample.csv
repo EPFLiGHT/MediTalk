@@ -1,6 +1,101 @@
 sample_id,text,text_length
-0,The ophthalmic medicine betaxolol is effective in reducing eye pressure and managing glaucoma.,94
-1,It is important to follow your healthcare provider's instructions carefully when taking ARIFER-XT.,98
-2,It is important to take GLUCOTROL as directed by your healthcare provider to maximize its effectiveness.,104
-3,Sulfadiazine sodium is an antibiotic commonly used to treat certain bacterial infections.,89
-4,Rimycold Syr is a syrup designed to provide relief from cold symptoms.,70
+0,"In intravenous solutions, magnesium acetate tetrahydrate, potassium acetate, and sodium chloride are commonly included to help maintain proper electrolyte balance.",163
+1,"Vasodil tab, or isosorbide, is a medication often used to treat conditions such as chronic heart failure due to its ability to widen blood vessels and reduce the heart's workload.",179
+2,"Areca catechu, also known as betel nut, is often used in traditional medicine for its stimulating effects.",106
+3,Remember to consult your healthcare provider before starting ethinyl estradiol; norelgestromin for contraception.,113
+4,The extended-release form of etodolac (er) allows for longer-lasting pain relief compared to the immediate-release form.,120
+5,Taking RALENOST-10 once a day can help improve heart health and reduce the risk of cardiovascular complications.,112
+6,Many patients have reported positive outcomes with HCGSUGE when used as directed by their healthcare provider.,110
+7,The use of colloidal copper in skincare products is becoming increasingly popular for its anti-inflammatory properties.,119
+8," Gabarich may cause dizziness or drowsiness, so avoid driving or operating machinery until you know how it affects you.",119
+9,"When prescribed by a healthcare professional, CIFRAN-CT-H can help alleviate symptoms and combat bacterial infections efficiently.",130
+10,"When used as directed, rimexolone (ophthalmic) can help improve eye conditions such as uveitis and allergic conjunctivitis.",123
+11,Anadrol-50 is commonly prescribed for the treatment of anemia associated with chronic kidney failure.,101
+12,The extract of eulophia campestris has shown potential anti-inflammatory properties in preliminary studies.,107
+13,It's important to follow the dosage instructions carefully when using SYCYP to manage your condition effectively.,113
+14,It is important to follow the instructions for taking the medicine 3 fc-tabs of isoniazid to effectively treat tuberculosis.,124
+15,NOVOCIN-OZ is commonly prescribed by healthcare providers for its broad-spectrum coverage against bacteria.,107
+16,MINIDIAB is commonly prescribed to help control blood sugar levels in patients with type 2 diabetes.,100
+17,GERTIC is known for effectively treating arthritis pain and inflammation.,73
+18,The medicinal properties of chlorothymol make it a valuable ingredient in healthcare products.,94
+19,The combination of dolutegravir and rilpivirine has shown effectiveness in managing HIV infections.,99
+20,Hydrochlorothiazide is commonly prescribed alongside telmisartan to manage high blood pressure.,95
+21,L-lysine monohydrochloride is often used as a dietary supplement to support immune function.,92
+22,"When taking ALSYET, carefully follow the dosage instructions provided by your healthcare provider.",98
+23,DISOGEL is recommended by many for enhancing digestion and reducing indigestion symptoms.,89
+24,Have you taken your dose of Ferinova today as prescribed by your doctor?,72
+25,Don't forget to take your INTAVITAL medication with a meal for better absorption.,81
+26,The extract of acacia is often used as a natural remedy for various digestive issues.,85
+27,Have you tried BIOBION to help boost your overall health and immunity?,70
+28,ACIDAL is an effective medication for treating acid reflux symptoms.,68
+29,It is important to discuss any side effects or concerns about DUREA with your doctor promptly.,94
+30,Longifene is a trusted medication for managing motion sickness.,63
+31,XTUM is a popular over-the-counter pain reliever known for its fast-acting formula.,83
+32, Enjoy long-lasting vitality with Stamina-z.,44
+33,Have you tried PRADO for your headache?,39
+34,Have you tried BETH-P to alleviate your symptoms?,49
+35,Take one Ferimax tab daily for an iron boost.,45
+36,Have you tried NEUROSPAS for your muscle spasms?,48
+37,Tobra-D is commonly used to treat eye infections.,49
+38, Stay healthy and energized with Multivite-FM.,46
+39, Manage your UTI symptoms effectively with Azo-s.,49
+40,Surbex Gold is a popular multivitamin supplement.,49
+41,Have you tried DROVIN FORTE for your symptoms yet?,50
+42,Looking for quick relief? Try PROFENAC!,39
+43,Have you tried MEDINASE for your allergy symptoms?,50
+44,Infa-v is a potent antiviral medication.,40
+45,Naprosyn gel provides fast relief from joint pain.,50
+46,Have you tried NERVIC SYR for your nerve pain yet?,50
+47,Have you tried Fippo-xt for your heart condition?,49
+48,"Amphetamine aspartate monohydrate, amphetamine sulfate, dextroamphetamine saccharate, and dextroamphetamine sulfate are all components of a medication used to treat attention deficit hyperactivity disorder (ADHD).",213
+49,"Acticlav powd for inj:amoxicillin is a commonly prescribed antibiotic for various bacterial infections. - Amoxicillin, found in acticlav powd for inj, is effective in treating a range of medical conditions.",206
+50,"The combination of dextrose, potassium chloride, potassium lactate, sodium chloride, and sodium phosphate, monobasic anhydrous is often administered intravenously to help regulate electrolyte levels in the body.",211
+51,"Amino acids are essential for protein synthesis and various bodily functions, while calcium chloride, dextrose, magnesium chloride, potassium chloride, potassium phosphate dibasic, and sodium chloride are important electrolytes for maintaining proper fluid balance and nerve function.",284
+52,"Aptisis Syr contains a unique blend of Tinospora cordifolia, Aloe barbadensis, Sida cordifolia, Cyperus rotundus, Cuminum cyminum, Trachyspermum ammi, Emblica officinalis, Picrorhiza kurroa, Embelia ribes, Piper longum, and Foeniculum vulgare.",243
+53,"In medical settings, healthcare providers may administer a solution containing dextrose, magnesium chloride, potassium chloride, potassium phosphate, dibasic, sodium chloride, sodium lactate, and sodium phosphate, monobasic anhydrous to treat various conditions.",262
+54,"The healthcare provider administered a solution containing amino acids, calcium chloride, dextrose, magnesium chloride, potassium chloride, potassium phosphate, dibasic, and sodium chloride to the patient.",205
+55,"I believe there might have been a typo as ""dim kid"" does not appear to be a recognized medicine name. If you have a different medicine name in mind or would like assistance with anything else, please feel free to let me know!",225
+56,"The combination of amino acids, dextrose, magnesium chloride, potassium acetate, potassium chloride, potassium phosphate dibasic, and sodium chloride is commonly used in medical settings for hydration and electrolyte balance.",225
+57,"Amino acids play a crucial role in various bodily functions, while magnesium chloride, potassium chloride, sodium chloride, and sodium phosphate, dibasic, heptahydrate are essential electrolytes for maintaining proper balance within the body.",242
+58,"The infusion of amino acids, calcium chloride, dextrose, magnesium sulfate, potassium chloride, sodium acetate, sodium glycerophosphate, and soybean oil can support patients' health in different clinical settings.",213
+59,"Amino acids are essential for building proteins in the body and supporting overall health, while magnesium chloride, potassium phosphate, dibasic, sodium acetate, and sodium chloride are vital electrolytes that help maintain proper bodily functions.",249
+60,"The healthcare provider may choose to administer a solution containing amino acids, dextrose, magnesium chloride, potassium phosphate dibasic, sodium acetate, and sodium chloride to address specific patient needs.",213
+61,"The multivitamin contains alpha-tocopherol acetate, ascorbic acid, biotin, cholecalciferol, cyanocobalamin, dexpanthenol, folic acid, niacinamide, pyridoxine hydrochloride, riboflavin 5'-phosphate sodium, thiamine hydrochloride, vitamin A palmitate, and vitamin K.",264
+62,"The multivitamin supplement contains alpha-tocopherol acetate, ascorbic acid, biotin, cholecalciferol, cyanocobalamin, dexpanthenol, folic acid, niacinamide, pyridoxine hydrochloride, riboflavin 5'-phosphate sodium, thiamine hydrochloride, vitamin a palmitate, and vitamin k.",275
+63,Dextroamphetamine saccharate; amphetamine aspartate monohydrate; dextroamphetamine sulfate; amphetamine sulfate is commonly prescribed for the treatment of attention deficit hyperactivity disorder (ADHD).,204
+64,E-SYLATE should be taken exactly as prescribed by your healthcare provider to ensure its effectiveness.,103
+65,Duzing is a prescribed medication for insomnia and sleep disorders.,67
+66,Amantadine is commonly prescribed to treat symptoms of Parkinson's disease and influenza.,89
+67,POGOFOL is an effective remedy for relieving inflammation and pain.,67
+68,Ensure to consult with your healthcare provider before starting a course of treatment with JONFLOX.,99
+69,The medicine Mediclav Tab containing Amoxicillin is commonly prescribed for various bacterial infections.,105
+70,Remember to take your daily dose of ACTVIT to help manage your condition effectively.,85
+71,It is important to follow your healthcare provider's instructions when taking ACIZ-S for optimal results.,105
+72,Pramipexole dihydrochloride is commonly prescribed to treat symptoms of Parkinson's disease.,92
+73,Ciprofloxacin hydrochloride and fluocinolone acetonide are two commonly prescribed medications for different types of infections and skin conditions.,149
+74,TOPCEF-DC is an antibiotic medication used to treat various bacterial infections.,81
+75,Taking KLORYL as directed by your healthcare provider can help alleviate digestive symptoms effectively.,104
+76,CALCIFLEX-OS is a reliable supplement for promoting strong bones and preventing bone-related issues.,100
+77,"When taken together, butalbital, aspirin, and caffeine can help alleviate migraines.",84
+78,Make sure to follow your healthcare provider's instructions while taking TAFERO-EM for the best results.,104
+79,Some individuals may experience drowsiness as a side effect of taking temazepam.,80
+80,Amphadase is an enzyme used to help improve the absorption of other injected medications.,89
+81,LEVEPSY-XR is a medication commonly prescribed for the treatment of epilepsy.,77
+82,CODYLEX-CC SYR is commonly used to relieve cough and cold symptoms in adults.,77
+83,It is important to finish the full course of amoxycillin as prescribed by your healthcare provider to ensure the infection is completely eradicated.,148
+84,DONETAZ-SR is commonly prescribed to alleviate symptoms of gastrointestinal diseases.,85
+85,The potential of zilucoplan sodium lies in its ability to target specific pathways in the immune system.,104
+86,Coral calx is commonly used in traditional Chinese medicine for its beneficial properties.,90
+87,"If you are experiencing breathing problems, consult your doctor about the effectiveness of STAROX.",98
+88,Make sure to follow the dosage instructions carefully when administering D-WORM to your pet.,92
+89,Make sure to take your prescribed dose of IMIPAM at the same time every day for the best results.,97
+90,Nettle is known for its anti-inflammatory properties and is commonly used to treat allergies and arthritis.,107
+91,"Remember to store TIOSTAT in a cool, dry place away from direct sunlight to maintain its effectiveness.",103
+92,Doctors may recommend Pentacarinat to help manage acute bronchospasms in certain patients.,90
+93,Have you tried POXYTAM for your symptoms yet?,45
+94,"When administered intravenously, albumin human can help maintain fluid balance in the body.",91
+95,"Formoterol fumarate is a key ingredient in CombiHale-FT Rotacap, a medication prescribed to manage respiratory conditions like asthma.",134
+96,Administering insulin human neutral soluble as directed can help regulate blood sugar levels effectively.,105
+97,"The consumption of polyphenols has been associated with various health benefits, including reduced inflammation and improved heart health.",138
+98,ZACMOX is a potent antibiotic used to treat a variety of bacterial infections.,78
+99,Many patients have experienced improved vision after receiving brolucizumab-dbll injections.,92

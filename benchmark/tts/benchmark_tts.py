@@ -35,6 +35,7 @@ calculate_rtf = shared_metrics.calculate_rtf
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler('benchmark.log')
@@ -348,9 +349,20 @@ def main():
     dataset_config = benchmark.config['dataset']
     sample_csv = benchmark.results_dir / "benchmark_sample.csv"
     
+    # Load existing sample if available and verify size
     if sample_csv.exists():
         logger.info(f"Loading existing sample from {sample_csv}")
         data_sample = pd.read_csv(sample_csv)
+        if len(data_sample) != dataset_config['sample_size']:
+            logger.warning(f"Existing sample size ({len(data_sample)}) does not match configured size ({dataset_config['sample_size']}). Creating new sample.")
+            data_sample = create_benchmark_sample(
+                metadata_path=dataset_config['metadata_path'],
+                sample_size=dataset_config['sample_size'],
+                output_path=str(sample_csv),
+                strategy=dataset_config['sampling_strategy'],
+                seed=dataset_config['random_seed']
+            )
+            logger.info(f"New sample created with {len(data_sample)} samples.")
     else:
         logger.info("Creating new benchmark sample...")
         data_sample = create_benchmark_sample(

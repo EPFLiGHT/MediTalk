@@ -1,45 +1,36 @@
 [
   {
-    "model": "orpheus",
-    "timestamp": "20251218_165126",
-    "total_samples": 5,
-    "successful_samples": 5,
-    "failed_samples": 0,
-    "success_rate": 1.0,
-    "wer_mean": 0.196474358974359,
-    "wer_median": 0.23076923076923078,
-    "wer_std": 0.06726570729607148,
-    "cer_mean": 0.0520063680044555,
-    "cer_median": 0.05319148936170213,
-    "rtf_mean": 1.7308668748929459,
-    "rtf_median": 1.7242906720970166,
-    "avg_generation_time": 11.508176708221436,
-    "avg_audio_duration": 6.656000000000001,
-    "total_audio_minutes": 0.5546666666666666,
-    "mos_mean": 4.118022775650024,
-    "mos_median": 4.173003673553467,
-    "mos_std": 0.13953770440832666
+    "error": "csm service not available"
   },
   {
-    "model": "bark",
-    "timestamp": "20251218_165239",
-    "total_samples": 5,
-    "successful_samples": 5,
+    "error": "qwen3omni service not available"
+  },
+  {
+    "error": "orpheus service not available"
+  },
+  {
+    "model": "orpheus",
+    "timestamp": "20251229_150530",
+    "total_samples": 100,
+    "successful_samples": 100,
     "failed_samples": 0,
     "success_rate": 1.0,
-    "wer_mean": 0.18814102564102564,
-    "wer_median": 0.23076923076923078,
-    "wer_std": 0.07698648561783004,
-    "cer_mean": 0.0535886621148395,
-    "cer_median": 0.05319148936170213,
-    "rtf_mean": 1.1314392287151793,
-    "rtf_median": 1.123442842652601,
-    "avg_generation_time": 10.066458368301392,
-    "avg_audio_duration": 8.909333333333333,
-    "total_audio_minutes": 0.7424444444444445,
-    "mos_mean": 3.151074981689453,
-    "mos_median": 3.0211780071258545,
-    "mos_std": 0.5936076296922752
+    "wer_mean": 0.13046404957780053,
+    "wer_median": 0.1111111111111111,
+    "wer_std": 0.1086390632163586,
+    "cer_mean": 0.039009124364304495,
+    "cer_median": 0.030389290660101556,
+    "rtf_mean": 1.714843144940209,
+    "rtf_median": 1.7094398029967324,
+    "avg_generation_time": 13.946546494960785,
+    "avg_audio_duration": 8.14176,
+    "total_audio_minutes": 13.569600000000001,
+    "mos_mean": 4.036999595165253,
+    "mos_median": 4.0589141845703125,
+    "mos_std": 0.2851587536827034
+  },
+  {
+    "error": "bark service not available"
   },
   {
     "error": "csm service not available"

@@ -3,7 +3,7 @@
 # Dataset
 dataset:
   metadata_path: "../../data/processed/USM/metadata.csv"
-  sample_size: 10
+  sample_size: 100
   sampling_strategy: "stratified"  # or "random"
   random_seed: 42
 
