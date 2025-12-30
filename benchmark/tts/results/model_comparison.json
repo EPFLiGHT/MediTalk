@@ -9,27 +9,6 @@
     "error": "orpheus service not available"
   },
   {
-    "model": "orpheus",
-    "timestamp": "20251229_150530",
-    "total_samples": 100,
-    "successful_samples": 100,
-    "failed_samples": 0,
-    "success_rate": 1.0,
-    "wer_mean": 0.13046404957780053,
-    "wer_median": 0.1111111111111111,
-    "wer_std": 0.1086390632163586,
-    "cer_mean": 0.039009124364304495,
-    "cer_median": 0.030389290660101556,
-    "rtf_mean": 1.714843144940209,
-    "rtf_median": 1.7094398029967324,
-    "avg_generation_time": 13.946546494960785,
-    "avg_audio_duration": 8.14176,
-    "total_audio_minutes": 13.569600000000001,
-    "mos_mean": 4.036999595165253,
-    "mos_median": 4.0589141845703125,
-    "mos_std": 0.2851587536827034
-  },
-  {
     "error": "bark service not available"
   },
   {
@@ -37,5 +16,95 @@
   },
   {
     "error": "qwen3omni service not available"
+  },
+  {
+    "error": "csm service not available"
+  },
+  {
+    "error": "qwen3omni service not available"
+  },
+  {
+    "model": "bark",
+    "timestamp": "20251229_162210",
+    "total_samples": 1000,
+    "successful_samples": 1000,
+    "failed_samples": 0,
+    "success_rate": 1.0,
+    "wer_mean": 0.19317885349001546,
+    "wer_median": 0.13840996168582376,
+    "wer_std": 0.22870609659089264,
+    "cer_mean": 0.07705103746353768,
+    "cer_median": 0.04,
+    "rtf_mean": 1.5369800787359649,
+    "rtf_median": 1.492139875853411,
+    "avg_generation_time": 14.651611568927764,
+    "avg_audio_duration": 9.492360000000001,
+    "total_audio_minutes": 158.20600000000002,
+    "mos_mean": 3.0296943794488906,
+    "mos_median": 2.9868191480636597,
+    "mos_std": 0.44357218964549655
+  },
+  {
+    "model": "csm",
+    "timestamp": "20251229_162210",
+    "total_samples": 1000,
+    "successful_samples": 1000,
+    "failed_samples": 0,
+    "success_rate": 1.0,
+    "wer_mean": 0.189370077303813,
+    "wer_median": 0.13333333333333333,
+    "wer_std": 0.18296473146888234,
+    "cer_mean": 0.10531038872072009,
+    "cer_median": 0.044444444444444446,
+    "rtf_mean": 2.2956209535339887,
+    "rtf_median": 2.2593778132006177,
+    "avg_generation_time": 15.341858058929443,
+    "avg_audio_duration": 6.53904,
+    "total_audio_minutes": 108.984,
+    "mos_mean": 3.6939060949087144,
+    "mos_median": 3.6948875188827515,
+    "mos_std": 0.6132535774590181
+  },
+  {
+    "model": "orpheus",
+    "timestamp": "20251229_162210",
+    "total_samples": 1000,
+    "successful_samples": 1000,
+    "failed_samples": 0,
+    "success_rate": 1.0,
+    "wer_mean": 0.13029355914634516,
+    "wer_median": 0.1111111111111111,
+    "wer_std": 0.10942098168747366,
+    "cer_mean": 0.04319874762701143,
+    "cer_median": 0.030303030303030304,
+    "rtf_mean": 2.2561076531277644,
+    "rtf_median": 2.3312170957281086,
+    "avg_generation_time": 17.07302854347229,
+    "avg_audio_duration": 7.665700666666667,
+    "total_audio_minutes": 127.76167777777778,
+    "mos_mean": 4.0075960241556166,
+    "mos_median": 4.033303499221802,
+    "mos_std": 0.29577644758739735
+  },
+  {
+    "model": "qwen3omni",
+    "timestamp": "20251229_162210",
+    "total_samples": 1000,
+    "successful_samples": 1000,
+    "failed_samples": 0,
+    "success_rate": 1.0,
+    "wer_mean": 0.143723329045152,
+    "wer_median": 0.1111111111111111,
+    "wer_std": 0.15070430547173752,
+    "cer_mean": 0.0550190178377033,
+    "cer_median": 0.03366065527334529,
+    "rtf_mean": 3.9534200359954514,
+    "rtf_median": 3.9006169562005493,
+    "avg_generation_time": 23.644304352045058,
+    "avg_audio_duration": 6.73658875,
+    "total_audio_minutes": 112.27647916666666,
+    "mos_mean": 4.3817998371124265,
+    "mos_median": 4.419952869415283,
+    "mos_std": 0.2288118857476121
   }
 ]

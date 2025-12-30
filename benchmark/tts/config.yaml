@@ -3,8 +3,8 @@
 # Dataset
 dataset:
   metadata_path: "../../data/processed/USM/metadata.csv"
-  sample_size: 100
-  sampling_strategy: "stratified"  # or "random"
+  sample_size: 1000
+  sampling_strategy: "stratified"  # "stratified" = balanced by text length, "random" = random sampling
   random_seed: 42
 
 # TTS Models to benchmark
@@ -31,3 +31,8 @@ nisqa_service:
 # Output
 results_dir: "results"
 save_audio: true  # Whether to save synthesized audio files or not after the benchmark
+interactive_mode: false  # Set to false to run without user prompts (assumes all services are running)
+
+# Parallel Execution Settings
+parallel_models: true  # Set to true to benchmark all models in parallel (requires all services running)
+max_parallel_models: null  # Optional: limit concurrent models (null = no limit, use number of models)

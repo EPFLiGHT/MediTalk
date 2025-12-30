@@ -1,14 +1,14 @@
-# TTS Benchmark Configuration - SIMPLE VERSION
+# TTS Benchmark Configuration
 # Copy to config.yaml and edit as needed
 
 # Dataset
 dataset:
   metadata_path: "../../data/processed/USM/metadata.csv"
-  sample_size: 500
-  sampling_strategy: "stratified"  # or "random"
+  sample_size: 1000
+  sampling_strategy: "stratified"  # "stratified" = balanced by text length, "random" = random sampling
   random_seed: 42
 
-# TTS Models to benchmark (comment out / remove to skip a model)
+# TTS Models to benchmark
 tts_models:
   - name: "orpheus"
     url: "http://localhost:5005"
@@ -19,10 +19,21 @@ tts_models:
   - name: "qwen3omni"
     url: "http://localhost:5014"
 
+
 # Whisper ASR (for round-trip evaluation)
 whisper_service:
   url: "http://localhost:5007"
 
+# NISQA-TTS (for MOS quality prediction) - OPTIONAL
+nisqa_service:
+  enabled: true  # Set to false to skip MOS evaluation
+  url: "http://localhost:8006"
+
 # Output
 results_dir: "results"
 save_audio: true  # Whether to save synthesized audio files or not after the benchmark
+interactive_mode: false  # Set to false to run without user prompts (assumes all services are running)
+
+# Parallel Execution Settings
+parallel_models: true  # Set to true to benchmark all models in parallel (requires all services running)
+max_parallel_models: null  # Optional: limit concurrent models (null = no limit, use number of models)

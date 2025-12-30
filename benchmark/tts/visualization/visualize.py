@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import numpy as np
+from matplotlib.patches import Rectangle
 
 # Set style
 sns.set_style("whitegrid")
@@ -48,14 +49,15 @@ def load_results(results_dir):
 
 def plot_wer_cer_comparison(df, output_dir):
     """Plot WER and CER comparison side by side."""
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
     models = df['model'].values
     wer_means = df['wer_mean'].values
     cer_means = df['cer_mean'].values
     
-    # WER plot
-    colors_wer = sns.color_palette("Reds_r", len(models))
+    # WER plot - color by performance zones
+    colors_wer = ['#10b981' if wer < 0.15 else '#f59e0b' if wer < 0.30 else '#ef4444' 
+                  for wer in wer_means]
     bars1 = ax1.bar(models, wer_means, color=colors_wer, alpha=0.8, edgecolor='black')
     ax1.set_ylabel('Word Error Rate (WER)')
     ax1.set_title('Word Error Rate - Lower is Better')
@@ -69,8 +71,17 @@ def plot_wer_cer_comparison(df, output_dir):
                 f'{height:.3f}',
                 ha='center', va='bottom', fontsize=9)
     
-    # CER plot
-    colors_cer = sns.color_palette("Blues_r", len(models))
+    # WER legend
+    wer_legend_elements = [
+        Rectangle((0, 0), 1, 1, fc='#10b981', ec='black', alpha=0.8, label='Excellent (< 0.15)'),
+        Rectangle((0, 0), 1, 1, fc='#f59e0b', ec='black', alpha=0.8, label='Acceptable (0.15-0.30)'),
+        Rectangle((0, 0), 1, 1, fc='#ef4444', ec='black', alpha=0.8, label='Poor (≥ 0.30)'),
+    ]
+    ax1.legend(handles=wer_legend_elements, loc='upper right', fontsize=8, framealpha=0.95)
+    
+    # CER plot - color by performance zones
+    colors_cer = ['#10b981' if cer < 0.08 else '#f59e0b' if cer < 0.15 else '#ef4444' 
+                  for cer in cer_means]
     bars2 = ax2.bar(models, cer_means, color=colors_cer, alpha=0.8, edgecolor='black')
     ax2.set_ylabel('Character Error Rate (CER)')
     ax2.set_title('Character Error Rate - Lower is Better')
@@ -84,6 +95,14 @@ def plot_wer_cer_comparison(df, output_dir):
                 f'{height:.3f}',
                 ha='center', va='bottom', fontsize=9)
     
+    # CER legend
+    cer_legend_elements = [
+        Rectangle((0, 0), 1, 1, fc='#10b981', ec='black', alpha=0.8, label='Excellent (< 0.08)'),
+        Rectangle((0, 0), 1, 1, fc='#f59e0b', ec='black', alpha=0.8, label='Acceptable (0.08-0.15)'),
+        Rectangle((0, 0), 1, 1, fc='#ef4444', ec='black', alpha=0.8, label='Poor (≥ 0.15)'),
+    ]
+    ax2.legend(handles=cer_legend_elements, loc='upper right', fontsize=8, framealpha=0.95)
+    
     plt.tight_layout()
     plt.savefig(output_dir / 'wer_cer_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -93,7 +112,7 @@ def plot_mos_comparison(df, output_dir):
     """Plot MOS (Mean Opinion Score) comparison if available."""
     # Check if MOS data exists
     if 'mos_mean' not in df.columns or df['mos_mean'].isna().all():
-        print("   ⓘ Skipping - No MOS data available")
+        print("   Skipping - No MOS data available")
         return
     
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -111,8 +130,8 @@ def plot_mos_comparison(df, output_dir):
     bars = ax.bar(models, mos_means, yerr=mos_stds, color=bar_colors, 
                   alpha=0.8, edgecolor='black', capsize=5)
     
-    ax.set_ylabel('Mean Opinion Score (MOS)')
-    ax.set_title('Mean Opinion Score - Higher is Better (1-5 scale)')
+    ax.set_ylabel('Predicted Mean Opinion Score (MOS)')
+    ax.set_title('Predicted Mean Opinion Score - Higher is Better (1-5 scale) \n (Predicted using NISQA-TTS)')
     ax.set_ylim(1, 5)  # MOS scale is 1-5
     ax.grid(axis='y', alpha=0.3)
     ax.tick_params(axis='x', rotation=45)
@@ -120,7 +139,7 @@ def plot_mos_comparison(df, output_dir):
     # Add horizontal reference lines
     ax.axhline(y=3.0, color='orange', linestyle='--', alpha=0.3, label='Acceptable (3.0)')
     ax.axhline(y=4.0, color='green', linestyle='--', alpha=0.3, label='Good (4.0)')
-    ax.legend(loc='lower right')
+    ax.legend(loc='upper left')
     
     # Add value labels on bars
     for bar in bars:
@@ -151,24 +170,40 @@ def plot_rtf_comparison(df, output_dir):
     colors_median = ['#059669' if rtf < 1.0 else '#d97706' if rtf < 2.0 else '#dc2626' 
                      for rtf in rtf_medians]
     
+    # Mean: solid bars, Median: hatched bars for visual distinction
     bars1 = ax.bar(x - width/2, rtf_means, width, label='Mean', 
                    color=colors_mean, alpha=0.8, edgecolor='black')
     bars2 = ax.bar(x + width/2, rtf_medians, width, label='Median', 
-                   color=colors_median, alpha=0.8, edgecolor='black')
+                   color=colors_median, alpha=0.8, edgecolor='black', hatch='//')
     
     # Add real-time threshold line
-    ax.axhline(y=1.0, color='red', linestyle='--', linewidth=2, 
-               label='Real-time threshold (RTF=1.0)', alpha=0.7)
+    threshold_line = ax.axhline(y=1.0, color='red', linestyle='--', linewidth=2, alpha=0.7)
     
     ax.set_xlabel('Model')
     ax.set_ylabel('Real-Time Factor (RTF)')
     ax.set_title('Real-Time Factor Comparison - Lower is Better\n(RTF < 1.0 = faster than real-time)')
     ax.set_xticks(x)
     ax.set_xticklabels(models, rotation=45, ha='right')
-    ax.legend()
     ax.grid(axis='y', alpha=0.3)
     
-    # Add value labels
+    legend_elements = [
+        threshold_line,
+        Rectangle((0, 0), 1, 1, fc='#10b981', ec='black', alpha=0.8, label='Fast (RTF < 1.0)'),
+        Rectangle((0, 0), 1, 1, fc='#f59e0b', ec='black', alpha=0.8, label='Acceptable (1.0 ≤ RTF < 2.0)'),
+        Rectangle((0, 0), 1, 1, fc='#ef4444', ec='black', alpha=0.8, label='Slow (RTF ≥ 2.0)'),
+        Rectangle((0, 0), 1, 1, fc='gray', ec='black', alpha=0.8, label='Mean'),
+        Rectangle((0, 0), 1, 1, fc='gray', ec='black', alpha=0.8, hatch='//', label='Median'),
+    ]
+    
+    ax.legend(handles=legend_elements, 
+             labels=['Real-time threshold (RTF=1.0)', 
+                    'Fast (RTF < 1.0)', 
+                    'Acceptable (1.0 ≤ RTF < 2.0)', 
+                    'Slow (RTF ≥ 2.0)',
+                    'Mean',
+                    'Median'],
+             loc='upper left', fontsize=9, framealpha=0.95)
+    
     for bars in [bars1, bars2]:
         for bar in bars:
             height = bar.get_height()
@@ -191,16 +226,21 @@ def plot_quality_vs_speed(df, output_dir):
     
     # Size points by CER (smaller CER = larger point)
     sizes = 1000 / (df['cer_mean'].values + 0.01)  # Add small constant to avoid division by zero
+
+    # add legend for sizes 
+    ax.scatter([], [], s=300, c='gray', alpha=0.6, label=f'Point Size ~ 1/CER \n (Larger point = Lower CER)')
+    ax.legend(scatterpoints=1, frameon=True, labelspacing=1, title='Point Size Legend')
     
     scatter = ax.scatter(rtf_means, wer_means, s=sizes, alpha=0.6, 
                         c=range(len(models)), cmap='viridis', edgecolors='black', linewidth=1.5)
     
     # Add model labels
     for i, model in enumerate(models):
+        x_offset = len(model) * -3
         ax.annotate(model, (rtf_means[i], wer_means[i]), 
-                   xytext=(10, 10), textcoords='offset points',
+                   xytext=(x_offset, 0), textcoords='offset points',
                    fontsize=10, fontweight='bold',
-                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.7))
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0))
     
     # Add reference lines
     ax.axvline(x=1.0, color='red', linestyle='--', alpha=0.5, label='Real-time (RTF=1.0)')
@@ -331,7 +371,6 @@ def plot_metrics_heatmap(df, output_dir):
         'RTF': df['rtf_mean'].values,
         'Gen Time (s)': df['avg_generation_time'].values,
         'Audio Dur (s)': df['avg_audio_duration'].values,
-        'Success Rate': df['success_rate'].values,
     }
     
     metrics_df = pd.DataFrame(metrics_data, index=models)
@@ -341,7 +380,6 @@ def plot_metrics_heatmap(df, output_dir):
     
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Create heatmap
     sns.heatmap(df_norm, annot=metrics_df.values, fmt='.3f', 
                 cmap='RdYlGn_r', cbar_kws={'label': 'Normalized Score (0=best, 1=worst)'},
                 linewidths=1, linecolor='white', ax=ax,
@@ -428,7 +466,7 @@ def plot_summary_table(df, output_dir):
     col_labels = ['Model', 'WER', 'CER', 'RTF']
     if has_mos:
         col_labels.append('MOS')
-    col_labels.extend(['Gen Time', 'Success', 'Samples'])
+    col_labels.extend(['Mean\nGen Time', 'Success', 'Samples'])
     
     col_widths = [0.15, 0.10, 0.10, 0.10]
     if has_mos:
@@ -445,43 +483,60 @@ def plot_summary_table(df, output_dir):
     table.set_fontsize(10)
     table.scale(1, 2.5)
     
-    # Style header
     num_cols = len(col_labels)
     for i in range(num_cols):
         table[(0, i)].set_facecolor('#667eea')
         table[(0, i)].set_text_props(weight='bold', color='white')
     
-    # Alternate row colors and highlight best values
+    # Alternate row colors
     for i in range(1, len(table_data) + 1):
         # Alternate row colors
         bg_color = '#f8f9fa' if i % 2 == 0 else 'white'
         for j in range(num_cols):
             table[(i, j)].set_facecolor(bg_color)
     
-    # Highlight best performers
+    # Highlight best/worst performers
+
     # Best WER (column 1)
     best_wer_idx = df['wer_mean'].idxmin() + 1
     table[(best_wer_idx, 1)].set_facecolor('#c6f6d5')
     table[(best_wer_idx, 1)].set_text_props(weight='bold')
+    # Worst WER (column 1)
+    worst_wer_idx = df['wer_mean'].idxmax() + 1
+    table[(worst_wer_idx, 1)].set_facecolor('#fed7dd')
+    table[(worst_wer_idx, 1)].set_text_props(weight='bold')
     
     # Best CER (column 2)
     best_cer_idx = df['cer_mean'].idxmin() + 1
     table[(best_cer_idx, 2)].set_facecolor('#c6f6d5')
     table[(best_cer_idx, 2)].set_text_props(weight='bold')
+    # Worst CER (column 2)
+    worst_cer_idx = df['cer_mean'].idxmax() + 1
+    table[(worst_cer_idx, 2)].set_facecolor('#fed7dd')
+    table[(worst_cer_idx, 2)].set_text_props(weight='bold')
     
     # Best RTF (column 3)
     best_rtf_idx = df['rtf_mean'].idxmin() + 1
     table[(best_rtf_idx, 3)].set_facecolor('#c6f6d5')
     table[(best_rtf_idx, 3)].set_text_props(weight='bold')
+    # Worst RTF (column 3)
+    worst_rtf_idx = df['rtf_mean'].idxmax() + 1
+    table[(worst_rtf_idx, 3)].set_facecolor('#fed7dd')
+    table[(worst_rtf_idx, 3)].set_text_props(weight='bold')
     
-    # Best MOS (column 4 if present) - higher is better
+    # Best MOS (column 4 if present)
     if has_mos:
         best_mos_idx = df['mos_mean'].idxmax() + 1
         table[(best_mos_idx, 4)].set_facecolor('#c6f6d5')
         table[(best_mos_idx, 4)].set_text_props(weight='bold')
+    # Worst MOS (column 4 if present)
+    if has_mos:
+        worst_mos_idx = df['mos_mean'].idxmin() + 1
+        table[(worst_mos_idx, 4)].set_facecolor('#fed7dd')
+        table[(worst_mos_idx, 4)].set_text_props(weight='bold')
     
-    plt.title('TTS Benchmark Results Summary\n(Green cells = best performance)', 
-             fontsize=14, fontweight='bold', pad=20)
+    plt.title('TTS Benchmark Results Summary\n(Green cells = best performance, Red cells = worst performance)', 
+             fontsize=14, fontweight='bold', pad=5)
     
     plt.savefig(output_dir / 'summary_table.png', dpi=300, bbox_inches='tight')
     plt.close()
