@@ -16,6 +16,7 @@ import re
 import numpy as np
 from typing import Dict, List, Tuple
 from jiwer import wer, cer
+from scipy import stats
 
 
 def normalize_text(text: str) -> str:
@@ -94,6 +95,32 @@ def calculate_rtf(processing_time: float, audio_duration: float) -> float:
     return processing_time / audio_duration
 
 
+def compute_ci(scores, confidence=0.95):
+    """
+    Compute confidence interval for a list of scores.
+    
+    Args:
+        scores: List or array of numeric values
+        confidence: Confidence level (default 0.95 for 95% CI)
+        
+    Returns:
+        Dictionary with mean, ci_lower, ci_upper, median, std, min, max
+    """
+    n = len(scores)
+    mean = np.mean(scores)
+    sem = stats.sem(scores)  # Standard error of mean
+    ci = stats.t.interval(confidence, n-1, loc=mean, scale=sem)
+    return {
+        "mean": float(mean),
+        "ci_lower": float(ci[0]),
+        "ci_upper": float(ci[1]),
+        "median": float(np.median(scores)),
+        "std": float(np.std(scores)),
+        "min": float(np.min(scores)),
+        "max": float(np.max(scores)),
+    }
+
+
 class MetricsAggregator:
     """Aggregates metrics across multiple samples."""
     
@@ -127,34 +154,21 @@ class MetricsAggregator:
         if not self.wer_scores:
             return {}
         
+        n = len(self.wer_scores)
+        
         return {
-            # Accuracy metrics
-            "wer": {
-                "mean": float(np.mean(self.wer_scores)),
-                "median": float(np.median(self.wer_scores)),
-                "std": float(np.std(self.wer_scores)),
-                "min": float(np.min(self.wer_scores)),
-                "max": float(np.max(self.wer_scores)),
-            },
-            "cer": {
-                "mean": float(np.mean(self.cer_scores)),
-                "median": float(np.median(self.cer_scores)),
-                "std": float(np.std(self.cer_scores)),
-                "min": float(np.min(self.cer_scores)),
-                "max": float(np.max(self.cer_scores)),
-            },
-            # Performance metrics
+            # Accuracy metrics with CI
+            "wer": compute_ci(self.wer_scores),
+            "cer": compute_ci(self.cer_scores),
+            
+            # Performance metrics with CI
             "latency": {
-                "mean": float(np.mean(self.latencies)),
-                "median": float(np.median(self.latencies)),
+                **compute_ci(self.latencies),
                 "p95": float(np.percentile(self.latencies, 95)),
                 "p99": float(np.percentile(self.latencies, 99)),
-                "min": float(np.min(self.latencies)),
-                "max": float(np.max(self.latencies)),
             },
             "rtf": {
-                "mean": float(np.mean(self.rtf_scores)),
-                "median": float(np.median(self.rtf_scores)),
+                **compute_ci(self.rtf_scores),
                 "p95": float(np.percentile(self.rtf_scores, 95)),
                 "p99": float(np.percentile(self.rtf_scores, 99)),
             },
@@ -163,6 +177,6 @@ class MetricsAggregator:
                 "total_minutes": float(np.sum(self.audio_durations) / 60),
                 "mean": float(np.mean(self.audio_durations)),
             },
-            "sample_count": len(self.wer_scores),
+            "sample_count": n,
             "error_count": len(self.errors),
         }

@@ -583,7 +583,7 @@ with st.sidebar:
                             # Language not supported
                             error_msg = data.get("error", "Unknown error")
                             detected_lang = data.get('detected_language', 'unknown')
-                            st.error(f"❌ {error_msg}")
+                            st.error(f"{error_msg}")
                             st.error("Please try again in **English** or **French** only.")
                             st.session_state.last_processed_audio = None
                     else:

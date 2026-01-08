@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, List
@@ -75,7 +76,7 @@ async def lifespan(app: FastAPI):
     global service_registry, conversation_manager
     
     # Startup
-    logger.info("🚀 Starting Controller Service...")
+    logger.info("Starting Controller Service...")
     logger.info(f"Service configuration: {SERVICE_CONFIG}")
     logger.info(f"Conversation storage: {CONVERSATION_STORAGE_DIR}")
     logger.info(f"Verbose logging: {VERBOSE}")
@@ -92,20 +93,20 @@ async def lifespan(app: FastAPI):
     try:
         health = await service_registry.health_check_all()
         for name, status in health.items():
-            status_emoji = "✅" if status["status"] == "healthy" else "❌"
-            logger.info(f"{status_emoji} {name}: {status['status']}")
+            status_symbol = "[OK]" if status["status"] == "healthy" else "[FAIL]"
+            logger.info(f"{status_symbol} {name}: {status['status']}")
     except Exception as e:
         logger.warning(f"Health check failed during startup: {e}")
         logger.info("Controller will start anyway - services can be checked later via /health endpoint")
     
-    logger.info("✅ Controller Service ready!")
+    logger.info("Controller Service ready!")
     
     yield
     
     # Shutdown
-    logger.info("🛑 Shutting down Controller Service...")
+    logger.info("Shutting down Controller Service...")
     await service_registry.close_all()
-    logger.info("✅ Controller Service stopped")
+    logger.info("Controller Service stopped")
 
 
 # ============================================================================
@@ -278,7 +279,7 @@ async def transcribe_with_conversation(request: TranscribeWithConversationReques
         )
     
     try:
-        logger.info(f"🎤 Transcribing audio for conversation {conversation_id}: {request.audio_path}")
+        logger.info(f"Transcribing audio for conversation {conversation_id}: {request.audio_path}")
         
         result = await call_stt(
             whisper_client,
@@ -290,11 +291,11 @@ async def transcribe_with_conversation(request: TranscribeWithConversationReques
         text = result.get("text", "")
         detected_lang = result.get("detected_language", "unknown")
         
-        logger.info(f"✅ Transcription completed (detected: {detected_lang}): '{text[:50]}...'")
+        logger.info(f"Transcription completed (detected: {detected_lang}): '{text[:50]}...'")
         
         # Check if language is supported (English or French only)
         if detected_lang.lower() not in ['en', 'fr', 'english', 'french']:
-            logger.warning(f"❌ Unsupported language detected: {detected_lang}")
+            logger.warning(f"Unsupported language detected: {detected_lang}")
             return TranscribeWithConversationResponse(
                 conversation_id=conversation_id,
                 text="",
@@ -327,7 +328,7 @@ async def transcribe_with_conversation(request: TranscribeWithConversationReques
         
         conversation_manager.add_message(conversation_id, user_message, verbose=VERBOSE)
         
-        logger.info(f"💾 Saved transcription to conversation {conversation_id}")
+        logger.info(f"Saved transcription to conversation {conversation_id}")
         
         return TranscribeWithConversationResponse(
             conversation_id=conversation_id,
@@ -449,8 +450,12 @@ async def chat(request: ChatRequest):
     conversation_id = conversation.id
     processing_info = {"services_called": []}
     
+    # Initialize timing tracking
+    timings = {}
+    pipeline_start = time.time()
+    
     # Log incoming request
-    logger.info(f"📨 Received /chat request for conversation {conversation_id}")
+    logger.info(f"Received /chat request for conversation {conversation_id}")
     logger.info(f"   - use_llm: {request.use_llm}, llm_service: {request.llm_service}")
     logger.info(f"   - use_tts: {request.use_tts}, tts_service: {request.tts_service}")
     logger.info(f"   - use_stt: {request.use_stt}")
@@ -473,15 +478,17 @@ async def chat(request: ChatRequest):
             if audio_content:
                 whisper_client = service_registry.get("whisper")
                 if whisper_client:
-                    logger.info(f"🎤 Calling Whisper STT for audio: {audio_content.data}")
+                    logger.info(f"Calling Whisper STT for audio: {audio_content.data}")
                     
+                    stt_start = time.time()
                     stt_result = await call_stt(
                         whisper_client,
                         audio_content.data,
                         verbose=VERBOSE
                     )
+                    timings['stt'] = time.time() - stt_start
                     
-                    logger.info(f"✅ Whisper STT completed: '{stt_result.get('text', '')[:50]}...'")
+                    logger.info(f"Whisper STT completed: '{stt_result.get('text', '')[:50]}...' (took {timings['stt']:.2f}s)")
                     
                     # Add transcribed text to message
                     user_message.content.append(
@@ -517,17 +524,19 @@ async def chat(request: ChatRequest):
             # Pass conversation JSON file path to service (not the data itself)
             conversation_json_path = conversation_manager.get_conversation_path(conversation_id)
             
-            logger.info(f"🤖 Calling {request.llm_service} LLM with conversation: {conversation_json_path}")
+            logger.info(f"Calling {request.llm_service} LLM with conversation: {conversation_json_path}")
             
+            llm_start = time.time()
             llm_result = await call_multimeditron(
                 llm_client,
                 conversation_json_path=conversation_json_path,
                 verbose=VERBOSE,
                 **(request.context or {})
             )
+            timings['llm'] = time.time() - llm_start
             
             assistant_text = llm_result.get("response", "")
-            logger.info(f"✅ {request.llm_service} response received: '{assistant_text[:100]}...'")
+            logger.info(f"{request.llm_service} response received: '{assistant_text[:100]}...' (took {timings['llm']:.2f}s)")
             
             processing_info["services_called"].append(request.llm_service)
             processing_info["llm_result"] = llm_result
@@ -558,12 +567,13 @@ async def chat(request: ChatRequest):
                 # Get updated conversation path (with timestamped filename)
                 conversation_json_path = conversation_manager.get_conversation_path(conversation_id)
                 
-                logger.info(f"🔊 Calling {request.tts_service} TTS for text: '{assistant_text[:50]}...'")
+                logger.info(f"Calling {request.tts_service} TTS for text: '{assistant_text[:50]}...'")
                 logger.info(f"   - Conversation path: {conversation_json_path}")
                 logger.info(f"   - Language: {request.tts_language}")
                 logger.info(f"   - Context: {request.context}")
                 
                 # Call TTS with conversation path (TTS extracts last assistant message)
+                tts_start = time.time()
                 tts_result = await call_tts(
                     tts_client,
                     target_text=assistant_text,  # For services that need it
@@ -572,10 +582,11 @@ async def chat(request: ChatRequest):
                     verbose=VERBOSE,
                     **(request.context or {})
                 )
+                timings['tts'] = time.time() - tts_start
                 
                 filename = tts_result.get("filename", "")
                 service = tts_result.get("service", request.tts_service)
-                logger.info(f"✅ {request.tts_service} TTS completed: {filename}")
+                logger.info(f"{request.tts_service} TTS completed: {filename} (took {timings['tts']:.2f}s)")
                 
                 processing_info["services_called"].append(request.tts_service)
                 processing_info["tts_result"] = tts_result
@@ -606,17 +617,30 @@ async def chat(request: ChatRequest):
                             conversation.updated_at = datetime.utcnow()
                             conversation_manager._save_to_file(conversation, verbose=VERBOSE)
                             
-                            logger.info(f"💾 Updated assistant message with audio URL: {audio_url_path}")
+                            logger.info(f"Updated assistant message with audio URL: {audio_url_path}")
                             
                             # Update assistant_message for response
                             assistant_message = last_message
         
         # Step 5: Return response
-        logger.info(f"✅ Chat completed for conversation {conversation_id}")
+        timings['total'] = time.time() - pipeline_start
+        
+        logger.info(f"Chat completed for conversation {conversation_id}")
         logger.info(f"   - Services called: {processing_info['services_called']}")
+        logger.info(f"Pipeline Timings:")
+        if 'stt' in timings:
+            logger.info(f"   - STT (Whisper): {timings['stt']:.2f}s")
+        if 'llm' in timings:
+            logger.info(f"   - LLM ({request.llm_service}): {timings['llm']:.2f}s")
+        if 'tts' in timings:
+            logger.info(f"   - TTS ({request.tts_service}): {timings['tts']:.2f}s")
+        logger.info(f"   - TOTAL END-TO-END: {timings['total']:.2f}s")
         logger.info(f"   - Assistant message has {len(assistant_message.content)} content items")
         for content in assistant_message.content:
             logger.info(f"     • {content.type}: {str(content.data)[:80]}...")
+        
+        # Add timings to processing_info for potential client use
+        processing_info['timings'] = timings
         
         response = ChatResponse(
             conversation_id=conversation_id,
@@ -624,7 +648,7 @@ async def chat(request: ChatRequest):
             processing_info=processing_info
         )
         
-        logger.info(f"📤 Sending response to client")
+        logger.info(f"Sending response to client")
         return response
     
     except Exception as e:

@@ -15,9 +15,15 @@ import requests
 import pandas as pd
 from tqdm import tqdm
 import yaml
+import sys
 
+# Add parent directory to path for shared modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from shared.data_sampler import create_benchmark_sample
 from metrics import MetricsAggregator, calculate_wer, calculate_cer
-from data_sampler import create_benchmark_sample
+
+
 
 # Configure logging
 logging.basicConfig(
@@ -88,18 +94,16 @@ class WhisperBenchmark:
         for _, row in tqdm(sample_df.iterrows(), total=len(sample_df), desc=f"{model_size}"):
             audio_path = row['audio_path']
             reference_text = row['transcription']
+            audio_duration = row['audio_duration']
             
-            # Make path absolute
             if not os.path.isabs(audio_path):
                 audio_path = os.path.join(base_path, audio_path)
             
-            # Transcribe
             result = self.transcribe_audio(audio_path)
             
             if result['success']:
                 wer_score = calculate_wer(reference_text, result['text'])
                 cer_score = calculate_cer(reference_text, result['text'])
-                audio_duration = 5.0  # Estimate
                 
                 metrics.add_sample(wer_score, cer_score, result['latency'], audio_duration)
                 
@@ -114,7 +118,7 @@ class WhisperBenchmark:
                     'error': None
                 })
             else:
-                metrics.add_sample(1.0, 1.0, result['latency'], 1.0, error=result['error'])
+                metrics.add_sample(1.0, 1.0, result['latency'], audio_duration, error=result['error'])
                 results_list.append({
                     'audio_path': audio_path,
                     'reference': reference_text,
@@ -153,7 +157,8 @@ class WhisperBenchmark:
             sample_size=self.config['data']['sample_size'],
             output_path=str(self.results_dir / 'benchmark_sample.csv'),
             strategy=self.config['data']['sampling_strategy'],
-            seed=self.config['data']['random_seed']
+            seed=self.config['data']['random_seed'],
+            benchmark_type='asr'
         )
         logger.info(f"Sample created: {len(sample_df)} files\n")
         

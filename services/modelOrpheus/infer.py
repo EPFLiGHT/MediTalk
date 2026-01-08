@@ -471,7 +471,7 @@ class OrpheusTTS:
         t0 = time.time()
         
         print("\n" + "="*80)
-        print(f"🚀 SPAWNING {num_chunks} WORKER PROCESSES")
+        print(f"SPAWNING {num_chunks} WORKER PROCESSES")
         print("="*80)
         
         try:
@@ -486,7 +486,7 @@ class OrpheusTTS:
             timings['parallel_generation'] = time.time() - t0
             
             print("="*80)
-            print(f"✅ ALL PROCESSES COMPLETE in {timings['parallel_generation']:.2f}s")
+            print(f"ALL PROCESSES COMPLETE in {timings['parallel_generation']:.2f}s")
             print("="*80 + "\n")
             
         except Exception as e:
@@ -627,10 +627,10 @@ class OrpheusTTS:
                         chunk_pbars[chunk_idx].refresh()
                     else:
                         logger.warning(f"[Chunk {chunk_idx+1}] Failed to generate")
-                        chunk_pbars[chunk_idx].set_description(f"  Chunk {chunk_idx+1:2d}/{num_chunks} ❌ FAILED")
+                        chunk_pbars[chunk_idx].set_description(f"  Chunk {chunk_idx+1:2d}/{num_chunks} [FAILED]")
                 except Exception as e:
                     logger.error(f"[Chunk {chunk_idx+1}] Error: {e}")
-                    chunk_pbars[chunk_idx].set_description(f"  Chunk {chunk_idx+1:2d}/{num_chunks} ❌ ERROR")
+                    chunk_pbars[chunk_idx].set_description(f"  Chunk {chunk_idx+1:2d}/{num_chunks} [ERROR]")
                 
                 overall_pbar.update(1)
         

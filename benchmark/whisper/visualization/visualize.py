@@ -10,7 +10,6 @@ import seaborn as sns
 from pathlib import Path
 import numpy as np
 
-# Set style
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (10, 6)
 plt.rcParams['font.size'] = 10
@@ -31,25 +30,33 @@ def load_results(results_dir):
 
 
 def plot_wer_comparison(results, output_dir):
-    """Plot WER comparison across models."""
+    """Plot WER comparison with 95% confidence intervals."""
     models = list(results.keys())
     wer_means = [results[m]['wer']['mean'] for m in models]
-    wer_medians = [results[m]['wer']['median'] for m in models]
+    wer_ci_lower = [results[m]['wer']['ci_lower'] for m in models]
+    wer_ci_upper = [results[m]['wer']['ci_upper'] for m in models]
+    wer_errors = [
+        [wer_means[i] - wer_ci_lower[i] for i in range(len(models))],
+        [wer_ci_upper[i] - wer_means[i] for i in range(len(models))]
+    ]
     
     fig, ax = plt.subplots()
-    x = np.arange(len(models))
-    width = 0.35
+    colors = ['#10b981' if wer < 0.15 else '#f59e0b' if wer < 0.30 else '#ef4444' 
+              for wer in wer_means]
     
-    ax.bar(x - width/2, wer_means, width, label='Mean', color='#667eea')
-    ax.bar(x + width/2, wer_medians, width, label='Median', color='#764ba2')
+    bars = ax.bar(models, wer_means, color=colors, alpha=0.8, edgecolor='black',
+                  yerr=wer_errors, capsize=5, error_kw={'elinewidth': 2, 'alpha': 0.7})
     
     ax.set_xlabel('Model')
     ax.set_ylabel('Word Error Rate (WER)')
-    ax.set_title('Word Error Rate Comparison - Lower is Better')
-    ax.set_xticks(x)
-    ax.set_xticklabels(models)
-    ax.legend()
+    ax.set_title('Word Error Rate with 95% CI - Lower is Better')
     ax.grid(axis='y', alpha=0.3)
+    
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}',
+                ha='center', va='bottom', fontsize=9)
     
     plt.tight_layout()
     plt.savefig(output_dir / 'wer_comparison.png', dpi=300, bbox_inches='tight')
@@ -57,18 +64,33 @@ def plot_wer_comparison(results, output_dir):
 
 
 def plot_cer_comparison(results, output_dir):
-    """Plot CER comparison across models."""
+    """Plot CER comparison with 95% confidence intervals."""
     models = list(results.keys())
     cer_means = [results[m]['cer']['mean'] for m in models]
+    cer_ci_lower = [results[m]['cer']['ci_lower'] for m in models]
+    cer_ci_upper = [results[m]['cer']['ci_upper'] for m in models]
+    cer_errors = [
+        [cer_means[i] - cer_ci_lower[i] for i in range(len(models))],
+        [cer_ci_upper[i] - cer_means[i] for i in range(len(models))]
+    ]
     
     fig, ax = plt.subplots()
-    colors = sns.color_palette("viridis", len(models))
-    ax.bar(models, cer_means, color=colors)
+    colors = ['#10b981' if cer < 0.08 else '#f59e0b' if cer < 0.15 else '#ef4444' 
+              for cer in cer_means]
+    
+    bars = ax.bar(models, cer_means, color=colors, alpha=0.8, edgecolor='black',
+                  yerr=cer_errors, capsize=5, error_kw={'elinewidth': 2, 'alpha': 0.7})
     
     ax.set_xlabel('Model')
     ax.set_ylabel('Character Error Rate (CER)')
-    ax.set_title('Character Error Rate Comparison - Lower is Better')
+    ax.set_title('Character Error Rate with 95% CI - Lower is Better')
     ax.grid(axis='y', alpha=0.3)
+    
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}',
+                ha='center', va='bottom', fontsize=9)
     
     plt.tight_layout()
     plt.savefig(output_dir / 'cer_comparison.png', dpi=300, bbox_inches='tight')
@@ -76,27 +98,32 @@ def plot_cer_comparison(results, output_dir):
 
 
 def plot_latency_comparison(results, output_dir):
-    """Plot latency metrics across models."""
+    """Plot latency with confidence intervals and percentiles."""
     models = list(results.keys())
     lat_means = [results[m]['latency']['mean'] for m in models]
-    lat_p95 = [results[m]['latency']['p95'] for m in models]
-    lat_p99 = [results[m]['latency']['p99'] for m in models]
+    lat_ci_lower = [results[m]['latency']['ci_lower'] for m in models]
+    lat_ci_upper = [results[m]['latency']['ci_upper'] for m in models]
+    lat_errors = [
+        [lat_means[i] - lat_ci_lower[i] for i in range(len(models))],
+        [lat_ci_upper[i] - lat_means[i] for i in range(len(models))]
+    ]
     
     fig, ax = plt.subplots()
-    x = np.arange(len(models))
-    width = 0.25
-    
-    ax.bar(x - width, lat_means, width, label='Mean', color='#10b981')
-    ax.bar(x, lat_p95, width, label='P95', color='#f59e0b')
-    ax.bar(x + width, lat_p99, width, label='P99', color='#ef4444')
+    bars = ax.bar(models, lat_means, color='#667eea', alpha=0.8, edgecolor='black',
+                  yerr=lat_errors, capsize=5, error_kw={'elinewidth': 2, 'alpha': 0.7},
+                  label='Mean with 95% CI')
     
     ax.set_xlabel('Model')
     ax.set_ylabel('Latency (seconds)')
-    ax.set_title('Latency Comparison - Lower is Better')
-    ax.set_xticks(x)
-    ax.set_xticklabels(models)
+    ax.set_title('Latency with 95% Confidence Interval - Lower is Better')
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
+    
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.2f}s',
+                ha='center', va='bottom', fontsize=9)
     
     plt.tight_layout()
     plt.savefig(output_dir / 'latency_comparison.png', dpi=300, bbox_inches='tight')
@@ -104,20 +131,33 @@ def plot_latency_comparison(results, output_dir):
 
 
 def plot_rtf_comparison(results, output_dir):
-    """Plot Real-Time Factor comparison."""
+    """Plot Real-Time Factor with confidence intervals."""
     models = list(results.keys())
     rtf_means = [results[m]['rtf']['mean'] for m in models]
+    rtf_ci_lower = [results[m]['rtf']['ci_lower'] for m in models]
+    rtf_ci_upper = [results[m]['rtf']['ci_upper'] for m in models]
+    rtf_errors = [
+        [rtf_means[i] - rtf_ci_lower[i] for i in range(len(models))],
+        [rtf_ci_upper[i] - rtf_means[i] for i in range(len(models))]
+    ]
     
     fig, ax = plt.subplots()
     colors = ['#10b981' if rtf < 1.0 else '#ef4444' for rtf in rtf_means]
-    ax.bar(models, rtf_means, color=colors)
+    bars = ax.bar(models, rtf_means, color=colors, alpha=0.8, edgecolor='black',
+                  yerr=rtf_errors, capsize=5, error_kw={'elinewidth': 2, 'alpha': 0.7})
     ax.axhline(y=1.0, color='red', linestyle='--', linewidth=2, label='Real-time threshold')
     
     ax.set_xlabel('Model')
     ax.set_ylabel('Real-Time Factor (RTF)')
-    ax.set_title('Real-Time Factor - Lower is Better (< 1.0 = faster than real-time)')
+    ax.set_title('RTF with 95% CI - Lower is Better\n(< 1.0 = faster than real-time)')
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
+    
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}',
+                ha='center', va='bottom', fontsize=9)
     
     plt.tight_layout()
     plt.savefig(output_dir / 'rtf_comparison.png', dpi=300, bbox_inches='tight')
@@ -160,7 +200,6 @@ def plot_metrics_heatmap(results, output_dir):
     
     df = pd.DataFrame(metrics_data, index=models)
     
-    # Normalize for heatmap
     df_norm = (df - df.min()) / (df.max() - df.min())
     
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -180,7 +219,7 @@ def plot_wer_distribution(results, results_dir, output_dir):
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
     
-    for idx, model in enumerate(models[:4]):  # Max 4 models
+    for idx, model in enumerate(models[:4]):
         detailed_file = results_dir / f"{model}_detailed_results.csv"
         if not detailed_file.exists():
             continue
@@ -196,7 +235,6 @@ def plot_wer_distribution(results, results_dir, output_dir):
         axes[idx].legend()
         axes[idx].grid(axis='y', alpha=0.3)
     
-    # Hide unused subplots
     for idx in range(len(models), 4):
         axes[idx].axis('off')
     
@@ -212,42 +250,188 @@ def plot_summary_table(results, output_dir):
     table_data = []
     for model in models:
         row = [
-            model,
+            model.upper(),
             f"{results[model]['wer']['mean']:.4f}",
             f"{results[model]['cer']['mean']:.4f}",
-            f"{results[model]['latency']['p95']:.2f}",
+            f"{results[model]['latency']['mean']:.2f}",
             f"{results[model]['rtf']['mean']:.3f}",
             str(results[model]['sample_count'])
         ]
         table_data.append(row)
     
-    fig, ax = plt.subplots(figsize=(10, len(models) * 0.8))
+    fig, ax = plt.subplots(figsize=(12, len(models) * 0.8 + 1))
     ax.axis('tight')
     ax.axis('off')
     
     table = ax.table(cellText=table_data,
-                    colLabels=['Model', 'WER', 'CER', 'Latency P95', 'RTF', 'Samples'],
+                    colLabels=['Model', 'WER', 'CER', 'Latency\n(mean, s)', 'RTF', 'Samples'],
                     cellLoc='center',
                     loc='center',
-                    colWidths=[0.15, 0.15, 0.15, 0.2, 0.15, 0.15])
+                    colWidths=[0.15, 0.15, 0.15, 0.18, 0.15, 0.15])
     
     table.auto_set_font_size(False)
     table.set_fontsize(10)
-    table.scale(1, 2)
+    table.scale(1, 2.5)
     
-    # Style header
     for i in range(6):
         table[(0, i)].set_facecolor('#667eea')
         table[(0, i)].set_text_props(weight='bold', color='white')
     
-    # Alternate row colors
     for i in range(1, len(table_data) + 1):
+        bg_color = '#f8f9fa' if i % 2 == 0 else 'white'
         for j in range(6):
-            if i % 2 == 0:
-                table[(i, j)].set_facecolor('#f0f0f0')
+            table[(i, j)].set_facecolor(bg_color)
     
-    plt.title('Benchmark Results Summary', fontsize=14, fontweight='bold', pad=20)
+    best_wer_idx = min(range(len(models)), key=lambda i: results[models[i]]['wer']['mean']) + 1
+    table[(best_wer_idx, 1)].set_facecolor('#c6f6d5')
+    table[(best_wer_idx, 1)].set_text_props(weight='bold')
+    
+    best_cer_idx = min(range(len(models)), key=lambda i: results[models[i]]['cer']['mean']) + 1
+    table[(best_cer_idx, 2)].set_facecolor('#c6f6d5')
+    table[(best_cer_idx, 2)].set_text_props(weight='bold')
+    
+    plt.title('Whisper Benchmark Results Summary\n(Green cells = best performance)', 
+             fontsize=14, fontweight='bold', pad=10)
     plt.savefig(output_dir / 'summary_table.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_latency_percentiles(results, output_dir):
+    """Plot latency percentiles (mean, p95, p99) to show tail latencies."""
+    models = list(results.keys())
+    lat_means = [results[m]['latency']['mean'] for m in models]
+    lat_p95 = [results[m]['latency']['p95'] for m in models]
+    lat_p99 = [results[m]['latency']['p99'] for m in models]
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = np.arange(len(models))
+    width = 0.25
+    
+    ax.bar(x - width, lat_means, width, label='Mean', color='#667eea', alpha=0.8)
+    ax.bar(x, lat_p95, width, label='P95', color='#f59e0b', alpha=0.8)
+    ax.bar(x + width, lat_p99, width, label='P99', color='#ef4444', alpha=0.8)
+    
+    ax.set_xlabel('Model')
+    ax.set_ylabel('Latency (seconds)')
+    ax.set_title('Latency Percentiles - Tail Latency Analysis')
+    ax.set_xticks(x)
+    ax.set_xticklabels(models)
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'latency_percentiles.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_rtf_percentiles(results, output_dir):
+    """Plot RTF percentiles (mean, p95, p99)."""
+    models = list(results.keys())
+    rtf_means = [results[m]['rtf']['mean'] for m in models]
+    rtf_p95 = [results[m]['rtf']['p95'] for m in models]
+    rtf_p99 = [results[m]['rtf']['p99'] for m in models]
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = np.arange(len(models))
+    width = 0.25
+    
+    ax.bar(x - width, rtf_means, width, label='Mean', color='#10b981', alpha=0.8)
+    ax.bar(x, rtf_p95, width, label='P95', color='#f59e0b', alpha=0.8)
+    ax.bar(x + width, rtf_p99, width, label='P99', color='#ef4444', alpha=0.8)
+    
+    ax.axhline(y=1.0, color='red', linestyle='--', linewidth=2, alpha=0.7, label='Real-time threshold')
+    
+    ax.set_xlabel('Model')
+    ax.set_ylabel('Real-Time Factor (RTF)')
+    ax.set_title('RTF Percentiles - Performance Consistency Analysis')
+    ax.set_xticks(x)
+    ax.set_xticklabels(models)
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'rtf_percentiles.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_uncertainty_comparison(results, output_dir):
+    """Plot confidence interval ranges for all key metrics."""
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    models = list(results.keys())
+    metrics = [
+        ('wer', 'WER', axes[0, 0], 'Error Rate'),
+        ('cer', 'CER', axes[0, 1], 'Error Rate'),
+        ('latency', 'Latency', axes[1, 0], 'Time (s)'),
+        ('rtf', 'RTF', axes[1, 1], 'Time Factor')
+    ]
+    
+    for metric, label, ax, ylabel in metrics:
+        means = [results[m][metric]['mean'] for m in models]
+        ci_lower = [results[m][metric]['ci_lower'] for m in models]
+        ci_upper = [results[m][metric]['ci_upper'] for m in models]
+        
+        sort_idx = np.argsort(means)
+        sorted_models = [models[i] for i in sort_idx]
+        sorted_means = [means[i] for i in sort_idx]
+        sorted_lower = [ci_lower[i] for i in sort_idx]
+        sorted_upper = [ci_upper[i] for i in sort_idx]
+        
+        y_pos = np.arange(len(sorted_models))
+        
+        for i, (model, mean, lower, upper) in enumerate(zip(sorted_models, sorted_means, sorted_lower, sorted_upper)):
+            ax.plot([lower, upper], [i, i], 'o-', linewidth=2.5, markersize=6, alpha=0.7)
+            ax.plot(mean, i, 'D', markersize=8, color='black', zorder=5)
+        
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(sorted_models)
+        ax.set_xlabel(ylabel)
+        ax.set_title(f'{label} with 95% Confidence Intervals')
+        ax.grid(axis='x', alpha=0.3)
+        
+        ax.plot([], [], 'D', markersize=8, color='black', label='Mean')
+        ax.plot([], [], 'o-', linewidth=2.5, markersize=6, alpha=0.7, label='95% CI')
+        ax.legend(loc='best', fontsize=8)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'uncertainty_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_performance_ranges(results, output_dir):
+    """Plot min-mean-median-max ranges for key metrics."""
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    models = list(results.keys())
+    metrics = [
+        ('wer', 'WER', axes[0, 0], 'Error Rate'),
+        ('cer', 'CER', axes[0, 1], 'Error Rate'),
+        ('latency', 'Latency', axes[1, 0], 'Time (s)'),
+        ('rtf', 'RTF', axes[1, 1], 'Time Factor')
+    ]
+    
+    for metric, label, ax, ylabel in metrics:
+        means = [results[m][metric]['mean'] for m in models]
+        mins = [results[m][metric]['min'] for m in models]
+        maxs = [results[m][metric]['max'] for m in models]
+        medians = [results[m][metric]['median'] for m in models]
+        
+        x_pos = np.arange(len(models))
+        
+        for i, (model, mean, median, min_val, max_val) in enumerate(zip(models, means, medians, mins, maxs)):
+            ax.plot([i, i], [min_val, max_val], 'o-', linewidth=2, markersize=5, alpha=0.5, color='gray')
+            ax.plot(i, mean, 's', markersize=10, color='blue', zorder=5, label='Mean' if i == 0 else '')
+            ax.plot(i, median, '^', markersize=10, color='orange', zorder=5, label='Median' if i == 0 else '')
+        
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(models, rotation=45, ha='right')
+        ax.set_ylabel(ylabel)
+        ax.set_title(f'{label} Performance Range (Min-Mean-Median-Max)')
+        ax.grid(axis='y', alpha=0.3)
+        ax.legend(loc='best', fontsize=9)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'performance_ranges.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 
@@ -266,43 +450,44 @@ def generate_all_plots(results_dir, output_dir=None):
     print("  Generating Visualizations")
     print(f"{'='*60}\n")
     
-    # Load results
-    print("📊 Loading benchmark results...")
+    print("Loading benchmark results...")
     results = load_results(results_dir)
     print(f"   Found {len(results)} models\n")
     
-    # Generate each plot
     plots = [
         ("WER Comparison", plot_wer_comparison),
         ("CER Comparison", plot_cer_comparison),
         ("Latency Comparison", plot_latency_comparison),
+        ("Latency Percentiles", plot_latency_percentiles),
         ("RTF Comparison", plot_rtf_comparison),
+        ("RTF Percentiles", plot_rtf_percentiles),
         ("Accuracy vs Speed", plot_accuracy_vs_speed),
         ("Metrics Heatmap", plot_metrics_heatmap),
+        ("Uncertainty Comparison", plot_uncertainty_comparison),
+        ("Performance Ranges", plot_performance_ranges),
         ("Summary Table", plot_summary_table),
     ]
     
     for name, plot_func in plots:
         try:
-            print(f"📈 Generating {name}...")
+            print(f"Generating {name}...")
             if plot_func == plot_wer_distribution:
                 plot_func(results, results_dir, output_dir)
             else:
                 plot_func(results, output_dir)
-            print(f"   ✅ Saved to plots/")
+            print(f"   Saved to plots/")
         except Exception as e:
-            print(f"   ❌ Failed: {e}")
+            print(f"   Failed: {e}")
     
-    # WER distribution (needs detailed results)
     try:
-        print(f"📈 Generating WER Distributions...")
+        print(f"Generating WER Distributions...")
         plot_wer_distribution(results, results_dir, output_dir)
-        print(f"   ✅ Saved to plots/")
+        print(f"   Saved to plots/")
     except Exception as e:
-        print(f"   ⚠️  Skipped (detailed results not available): {e}")
+        print(f"   Skipped (detailed results not available): {e}")
     
     print(f"\n{'='*60}")
-    print(f"✅ All visualizations saved to: {output_dir}")
+    print(f"All visualizations saved to: {output_dir}")
     print(f"{'='*60}\n")
     
     return output_dir

@@ -14,14 +14,6 @@ The script will:
 3. Run benchmarks for all models
 4. Generate results and visualizations
 
-## Results
-
-Results saved to `results/`:
-- `model_comparison.json` - Summary of all models
-- `{model}_detailed_results.csv` - Per-sample results for each model
-- `{model}_summary.json` - Metrics for each model
-- `plots/` - 8 visualization charts (cf. visualization/README.md)
-
 ## Configuration
 
 Edit `config.yaml`:
@@ -33,6 +25,9 @@ models:
 data:
   sample_size: 1000  # Number of samples (max 790'865)
   sampling_strategy: "stratified"  # or "random"
+
+whisper_service:
+  url: "http://localhost:5007"
 ```
 
 ## Workflow
@@ -47,12 +42,22 @@ For each model in your config:
 ## Requirements
 
 
-- Get the USM dataset (cf. `../data/fetching/README.md`
-- Process the USM dataset (cf. `../data/processing/README.md`))
+- Get the USM dataset (cf. `../data/fetching/README.md`)
+- Process the USM dataset (cf. `../data/processing/README.md`)
 
 ## Metrics
 
-- **WER** (Word Error Rate): Lower is better (< 0.10 excellent)
+- **WER** (Word Error Rate): Lower is better
 - **CER** (Character Error Rate): Lower is better
-- **Latency**: Processing time per file
+- **Latency**: Processing time per file (mean, p95, p99)
 - **RTF** (Real-Time Factor): < 1.0 = faster than real-time
+- **Confidence Intervals**: 95% CI for all metrics
+
+## Results
+
+Results saved to `results/`:
+- `benchmark_sample.csv` - Sample dataset used for all models
+- `model_comparison.json` - Summary with confidence intervals and percentiles
+- `{model}_detailed_results.csv` - Per-sample results for each model
+- `{model}_summary.json` - Metrics for each model
+- `plots/` - Visualization charts

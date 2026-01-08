@@ -11,12 +11,11 @@ TTS-specific metrics:
 import numpy as np
 from typing import Dict, List
 import logging
-
-# Import shared metrics (WER, CER, RTF, normalization)
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'shared'))
-import metrics as shared_metrics
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared import metrics as shared_metrics
 
 calculate_wer = shared_metrics.calculate_wer
 calculate_cer = shared_metrics.calculate_cer
@@ -36,7 +35,7 @@ def calculate_asr_roundtrip_wer(text: str, audio_path: str, asr_client) -> Dict:
     
     Generate audio -> transcribe with Whisper -> compute WER/CER
     """
-    # TODO: Implement in later step
+    raise NotImplementedError("calculate_asr_roundtrip_wer not implemented yet")
     pass
 
 
@@ -57,10 +56,10 @@ class TTSMetricsAggregator:
         
     def add_sample(self, metrics_dict: Dict):
         """Add metrics for a single sample."""
-        # TODO: Implement in later step
+        raise NotImplementedError("TTSMetricsAggregator.add_sample not implemented yet")
         pass
     
     def get_summary(self) -> Dict:
         """Get comprehensive summary statistics."""
-        # TODO: Implement in later step
+        raise NotImplementedError("TTSMetricsAggregator.get_summary not implemented yet")
         pass

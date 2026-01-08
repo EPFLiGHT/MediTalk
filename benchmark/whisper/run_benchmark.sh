@@ -7,13 +7,13 @@ echo ""
 
 # Check if we're in the right directory
 if [ ! -f "benchmark_whisper.py" ]; then
-    echo "❌ Error: Please run this script from the benchmark/whisper directory"
+    echo "Error: Please run this script from the benchmark/whisper directory"
     exit 1
 fi
 
 # Check if config file is provided
 if [ ! -f "config.yaml" ]; then
-    echo "❌ Error: Config file 'config.yaml' not found in the current directory"
+    echo "Error: Config file 'config.yaml' not found in the current directory"
     echo "Please provide a valid config file (cf README.md)."
     echo "Tip: You can copy from 'config_example.yaml'."
     exit 1
@@ -34,7 +34,7 @@ echo "Installing dependencies..."
 pip install -r requirements.txt
 
 if [ $? -ne 0 ]; then
-    echo "❌ Failed to install dependencies"
+    echo "Error:Failed to install dependencies"
     exit 1
 fi
 
@@ -64,7 +64,7 @@ if [ $? -eq 0 ]; then
     echo "=================================="
     
 else
-    echo "❌ Whisper service is not running"
+    echo "Error:Whisper service is not running"
     echo ""
     echo "Please start the Whisper service first:"
     echo ""
